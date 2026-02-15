@@ -1,24 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { auth } from '../firebase/config';
-import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from 'firebase/auth';
-import { Chrome, LogOut, ChevronLeft, ShieldCheck, Zap } from 'lucide-react';
-import ImageUploader from './ImageUploader';
+import React, { useState } from 'react';
+import { auth, db } from '../firebase/config';
+import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
+import { Chrome, ShieldCheck, Zap, ChevronLeft } from 'lucide-react';
 import AdminLayout from './AdminLayout';
+import { useAuth } from '../context/AuthContext';
+import { Navigate, useLocation } from 'react-router-dom';
 
 const AdminPanel = ({ onBack }) => {
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const { user, isAdmin, loading } = useAuth();
+    const [localLoading, setLocalLoading] = useState(false);
     const [error, setError] = useState('');
-
-    useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-            setUser(currentUser);
-            setLoading(false);
-        });
-        return () => unsubscribe();
-    }, []);
+    const location = useLocation();
 
     const handleGoogleLogin = async () => {
+        setLocalLoading(true);
         setError('');
         try {
             const provider = new GoogleAuthProvider();
@@ -26,22 +21,24 @@ const AdminPanel = ({ onBack }) => {
         } catch (err) {
             console.error(err);
             setError('Login failed: ' + err.message);
-        }
-    };
-
-    const handleLogout = async () => {
-        try {
-            await signOut(auth);
-        } catch (err) {
-            console.error(err);
+            setLocalLoading(false);
         }
     };
 
     if (loading) {
-        return <div className="flex h-screen items-center justify-center">Loading...</div>;
+        return (
+            <div className="flex h-screen items-center justify-center bg-[#f8f9fa]">
+                <div className="w-8 h-8 border-4 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+        );
     }
 
-    if (!user) {
+    // If we are on /login and already an admin, go to /admin
+    if (user && isAdmin && location.pathname === '/login') {
+        return <Navigate to="/admin" replace />;
+    }
+
+    if (!user || !isAdmin) {
         return (
             <div className="flex h-screen items-center justify-center bg-[#f8f9fa] p-4 font-sans">
                 <div className="w-full max-w-md space-y-8 rounded-[2rem] bg-white p-12 shadow-2xl border border-gray-100 relative overflow-hidden">
@@ -64,12 +61,20 @@ const AdminPanel = ({ onBack }) => {
                             </div>
                         )}
 
+                        {user && !isAdmin && (
+                            <div className="rounded-xl bg-amber-50 p-4 text-center text-[10px] font-black uppercase tracking-widest text-amber-600 border border-amber-100 mb-6 font-sans">
+                                Access Denied: Admin role required.<br />
+                                <span className="lowercase font-mono text-[8px] opacity-70">UID: {user.uid}</span>
+                            </div>
+                        )}
+
                         <button
                             onClick={handleGoogleLogin}
-                            className="flex w-full items-center justify-center gap-4 rounded-2xl border border-gray-100 bg-white px-4 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-200 transition-all active:scale-95 group"
+                            disabled={localLoading}
+                            className="flex w-full items-center justify-center gap-4 rounded-2xl border border-gray-100 bg-white px-4 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-200 transition-all active:scale-95 group disabled:opacity-50"
                         >
                             <Chrome size={20} className="text-red-500 group-hover:animate-spin-slow" />
-                            Sign in with Google Account
+                            {localLoading ? 'Signing in...' : 'Sign in with Google Account'}
                         </button>
 
                         <div className="mt-12 pt-8 border-t border-gray-50 flex items-center justify-center gap-4">
