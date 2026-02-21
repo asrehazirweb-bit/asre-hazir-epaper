@@ -1,113 +1,89 @@
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase/config';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import {
+    onSnapshot,
+    collection,
+    query,
+    orderBy,
+    doc
+} from 'firebase/firestore';
 import {
     LogOut,
     LayoutDashboard,
-    Upload,
-    FileText,
-    Settings,
     Search,
     RefreshCw,
     User,
     Newspaper,
-    Clock,
-    Eye,
     AlertTriangle,
-    TrendingUp,
-    Edit,
     Home,
     Monitor,
     BarChart3,
-    Layers
+    Layers,
+    Activity,
+    Settings as SettingsIcon,
+    Clock,
+    Zap,
+    ChevronLeft,
+    ChevronRight,
+    Search as SearchIcon,
+    Bell,
+    ExternalLink
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import ImageUploader from './ImageUploader';
 
+// Import Admin Sections
+import Dashboard from './admin/Dashboard';
+import Editions from './admin/Editions';
+import EditionEditor from './admin/EditionEditor';
+import Content from './admin/Content';
+import Analytics from './admin/Analytics';
+import Settings from './admin/Settings';
+
 const AdminLayout = ({ onBack, user }) => {
-    const [activeTab, setActiveTab] = useState('dashboard');
+    const location = useLocation();
+    const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState('');
     const [editions, setEditions] = useState([]);
+    const [liveStats, setLiveStats] = useState({
+        totalEditions: 0,
+        activeEditions: 0,
+        lowBattery: 0,
+        totalReaders: 0
+    });
     const [loading, setLoading] = useState(false);
-    const [previewMode, setPreviewMode] = useState(false);
-
-    // Mock data for demonstration - replace with real Firestore data
-    const mockEditions = [
-        {
-            id: 'ED-001',
-            name: 'Morning Edition',
-            status: 'PUBLISHED',
-            online: true,
-            battery: 85,
-            lastSync: '2 min ago',
-            syncTime: 103,
-            thumbnail: 'https://via.placeholder.com/200x280/333/fff?text=Front+Page',
-            pages: 24,
-            readers: 1234
-        },
-        {
-            id: 'ED-002',
-            name: 'Evening Edition',
-            status: 'PUBLISHED',
-            online: true,
-            battery: 78,
-            lastSync: '5 min ago',
-            syncTime: 98,
-            thumbnail: 'https://via.placeholder.com/200x280/444/fff?text=Evening',
-            pages: 20,
-            readers: 987
-        },
-        {
-            id: 'ED-003',
-            name: 'Weekend Special',
-            status: 'DRAFT',
-            online: false,
-            battery: 45,
-            lastSync: '103 min ago',
-            syncTime: 45,
-            thumbnail: 'https://via.placeholder.com/200x280/555/fff?text=Weekend',
-            pages: 32,
-            readers: 2341
-        },
-        {
-            id: 'ED-004',
-            name: 'Sports Section',
-            status: 'PUBLISHED',
-            online: true,
-            battery: 92,
-            lastSync: '1 min ago',
-            syncTime: 156,
-            thumbnail: 'https://via.placeholder.com/200x280/666/fff?text=Sports',
-            pages: 16,
-            readers: 1567
-        },
-        {
-            id: 'ED-005',
-            name: 'Business Daily',
-            status: 'PUBLISHED',
-            online: true,
-            battery: 67,
-            lastSync: '8 min ago',
-            syncTime: 203,
-            thumbnail: 'https://via.placeholder.com/200x280/777/fff?text=Business',
-            pages: 18,
-            readers: 2109
-        },
-        {
-            id: 'ED-006',
-            name: 'Sunday Magazine',
-            status: 'SCHEDULED',
-            online: false,
-            battery: 34,
-            lastSync: '120 min ago',
-            syncTime: 34,
-            thumbnail: 'https://via.placeholder.com/200x280/888/fff?text=Magazine',
-            pages: 48,
-            readers: 3456
-        }
-    ];
+    const [isConnected, setIsConnected] = useState(false);
 
     useEffect(() => {
-        setEditions(mockEditions);
+        setLoading(true);
+        const q = query(collection(db, 'editions'), orderBy('createdAt', 'desc'));
+
+        const unsub = onSnapshot(q,
+            (snapshot) => {
+                const data = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data(),
+                    lastSync: doc.data().lastSync?.toDate?.()?.toLocaleTimeString() || 'Just now'
+                }));
+                setEditions(data);
+                setIsConnected(true);
+                setLoading(false);
+
+                setLiveStats({
+                    totalEditions: data.length,
+                    activeEditions: data.filter(e => e.status === 'PUBLISHED').length,
+                    lowBattery: data.filter(e => e.battery < 30).length,
+                    totalReaders: data.reduce((sum, e) => sum + (e.readers || 0), 0)
+                });
+            },
+            (error) => {
+                console.error("Dashboard connection error:", error);
+                setIsConnected(false);
+            }
+        );
+
+        return () => unsub();
     }, []);
 
     const handleLogout = async () => {
@@ -115,260 +91,166 @@ const AdminLayout = ({ onBack, user }) => {
         onBack();
     };
 
-    const handleSyncAll = () => {
-        setLoading(true);
-        setTimeout(() => {
-            setLoading(false);
-            alert('All editions synced successfully!');
-        }, 2000);
-    };
-
-    const filteredEditions = editions.filter(edition =>
-        edition.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        edition.id.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-
-    const stats = {
-        totalEditions: editions.length,
-        activeEditions: editions.filter(e => e.status === 'PUBLISHED').length,
-        lowBattery: editions.filter(e => e.battery < 50).length,
-        totalReaders: editions.reduce((sum, e) => sum + e.readers, 0)
-    };
-
     const navItems = [
-        { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
-        { id: 'editions', label: 'Editions', icon: <Newspaper size={18} /> },
-        { id: 'content', label: 'Content', icon: <Layers size={18} /> },
-        { id: 'templates', label: 'Templates', icon: <Monitor size={18} /> },
-        { id: 'analytics', label: 'Analytics', icon: <BarChart3 size={18} /> },
-        { id: 'settings', label: 'Settings', icon: <Settings size={18} /> },
+        { path: '/admin/dashboard', id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+        { path: '/admin/editions', id: 'editions', label: 'Editions', icon: <Newspaper size={20} /> },
+        { path: '/admin/content', id: 'content', label: 'Content', icon: <Layers size={20} /> },
+        { path: '/admin/analytics', id: 'analytics', label: 'Analytics', icon: <BarChart3 size={20} /> },
+        { path: '/admin/settings', id: 'settings', label: 'Settings', icon: <SettingsIcon size={20} /> },
     ];
 
+    useEffect(() => {
+        if (location.pathname === '/admin' || location.pathname === '/admin/') {
+            navigate('/admin/dashboard');
+        }
+    }, [location.pathname, navigate]);
+
     return (
-        <div className="flex h-screen bg-gray-100 dark:bg-gray-900 font-sans overflow-hidden">
-            {/* Sidebar */}
-            <aside className="w-64 bg-gray-800 dark:bg-gray-950 flex flex-col">
-                {/* Brand */}
-                <div className="h-20 flex items-center justify-center border-b border-gray-700">
-                    <h1 className="text-3xl font-bold text-white tracking-wider">EPAPER</h1>
+        <div className="flex h-screen bg-[#0B0F19] text-gray-100 antialiased font-sans overflow-hidden">
+            {/* 💎 PREMIUM SIDEBAR */}
+            <aside className="w-64 bg-[#111827] border-r border-white/5 flex flex-col z-30">
+                {/* Brand Logo */}
+                <div className="h-20 flex items-center px-6 gap-3 border-b border-white/5">
+                    <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
+                        <Zap size={18} className="text-white fill-current" />
+                    </div>
+                    <span className="text-lg font-bold tracking-tight text-white uppercase italic">Asre <span className="text-blue-500">CMS</span></span>
                 </div>
 
-                {/* Navigation */}
-                <nav className="flex-1 py-6 space-y-1">
+                {/* Main Navigation */}
+                <nav className="flex-1 py-6 px-3 space-y-1">
+                    <p className="px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-500">Navigation</p>
                     {navItems.map((item) => (
-                        <button
+                        <NavLink
                             key={item.id}
-                            onClick={() => setActiveTab(item.id)}
-                            className={`w-full flex items-center gap-3 px-6 py-3 text-sm font-medium transition-all ${activeTab === item.id
-                                    ? 'bg-blue-600 text-white'
-                                    : 'text-gray-400 hover:bg-gray-700 hover:text-white'
-                                }`}
+                            to={item.path}
+                            className={({ isActive }) => `
+                                flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative
+                                ${isActive
+                                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/10'
+                                    : 'text-gray-400 hover:text-white hover:bg-white/5'}
+                            `}
                         >
-                            <Home size={18} />
-                            <span>{item.label}</span>
-                        </button>
+                            {item.icon}
+                            <span className="text-sm font-medium">{item.label}</span>
+                            {location.pathname === item.path && (
+                                <motion.div layoutId="activeNav" className="absolute right-3 w-1.5 h-1.5 bg-white rounded-full" />
+                            )}
+                        </NavLink>
                     ))}
                 </nav>
+
+                {/* Sidebar Footer */}
+                <div className="p-4 border-t border-white/5 space-y-4">
+                    <div className="p-4 bg-white/5 rounded-2xl">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500">
+                                <Activity size={14} />
+                            </div>
+                            <span className="text-xs font-bold text-gray-300">System Live</span>
+                        </div>
+                        <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                            <motion.div animate={{ opacity: [1, 0.5, 1] }} transition={{ repeat: Infinity, duration: 2 }} className="h-full bg-blue-500" style={{ width: isConnected ? '100%' : '30%' }} />
+                        </div>
+                    </div>
+                    <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-400 hover:text-red-400 hover:bg-red-400/5 rounded-xl transition-all"
+                    >
+                        <LogOut size={18} />
+                        Logout
+                    </button>
+                </div>
             </aside>
 
-            {/* Main Content */}
-            <main className="flex-1 flex flex-col overflow-hidden">
-                {/* Top Bar */}
-                <header className="h-20 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-8">
-                    <div className="flex items-center gap-6">
-                        {/* Preview Toggle */}
-                        <div className="flex items-center gap-3">
-                            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                                PREVIEW ON DEVICE
-                            </span>
-                            <button
-                                onClick={() => setPreviewMode(!previewMode)}
-                                className={`relative w-12 h-6 rounded-full transition-colors ${previewMode ? 'bg-blue-600' : 'bg-gray-300'
-                                    }`}
-                            >
-                                <span
-                                    className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${previewMode ? 'transform translate-x-6' : ''
-                                        }`}
-                                />
-                            </button>
+            {/* 🖥️ MAIN VIEWPORT */}
+            <main className="flex-1 flex flex-col min-w-0 bg-[#0B0F19] relative">
+                {/* Modern Header */}
+                <header className="h-20 glass-panel flex items-center justify-between px-8 z-20 shrink-0">
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={onBack}
+                            className="p-2.5 hover:bg-white/5 rounded-xl transition-colors border border-white/5"
+                            title="Back to Reader"
+                        >
+                            <ChevronLeft size={20} className="text-gray-400" />
+                        </button>
+                        <div className="h-6 w-px bg-white/10 mx-2" />
+                        <div>
+                            <h2 className="text-sm font-bold text-white tracking-tight uppercase tracking-widest">{location.pathname.split('/').pop()} Control</h2>
+                            <p className="text-[10px] text-gray-500 font-medium tracking-wide uppercase">{isConnected ? 'System Pulse: Optimal' : 'Connecting to Server...'}</p>
                         </div>
+                    </div>
 
-                        {/* Search */}
-                        <div className="relative w-80">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                    <div className="flex items-center gap-6">
+                        <div className="relative group">
+                            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-blue-500 transition-colors" size={16} />
                             <input
                                 type="text"
-                                placeholder="Search by Edition ID..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="Search Command..."
+                                className="pl-10 pr-4 py-2 bg-white/5 border border-white/5 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500 transition-all w-64"
                             />
                         </div>
 
-                        {/* Sync Button */}
-                        <button
-                            onClick={handleSyncAll}
-                            disabled={loading}
-                            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm flex items-center gap-2 transition-all disabled:opacity-50"
-                        >
-                            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-                            SYNC ALL DEVICES
-                        </button>
-                    </div>
-
-                    {/* User Profile */}
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
-                            <User size={18} className="text-blue-600" />
+                        <div className="flex items-center gap-2">
+                            <button className="p-2.5 text-gray-400 hover:text-white hover:bg-white/5 rounded-xl transition-all relative">
+                                <Bell size={20} />
+                                <span className="absolute top-2 right-2 w-2 h-2 bg-blue-500 rounded-full border-2 border-[#0B0F19]" />
+                            </button>
+                            <button className="p-2.5 text-gray-400 hover:text-white hover:bg-white/5 rounded-xl transition-all">
+                                <ExternalLink size={20} />
+                            </button>
                         </div>
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {user?.displayName || 'Admin User'}
-                        </span>
-                        <button
-                            onClick={handleLogout}
-                            className="ml-4 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                        >
-                            <LogOut size={18} className="text-gray-600 dark:text-gray-400" />
-                        </button>
+
+                        <div className="w-px h-8 bg-white/10 mx-2" />
+
+                        <div className="flex items-center gap-3">
+                            <div className="text-right">
+                                <p className="text-xs font-bold text-white leading-none">{user?.displayName || 'Admin'}</p>
+                                <p className="text-[9px] font-bold text-blue-500 uppercase tracking-widest mt-1">Authorized</p>
+                            </div>
+                            <div className="w-10 h-10 rounded-xl bg-blue-600 p-0.5 shadow-lg shadow-blue-500/10">
+                                <img
+                                    src={user?.photoURL || `https://ui-avatars.com/api/?name=${user?.displayName}&background=2563EB&color=fff`}
+                                    className="w-full h-full object-cover rounded-[10px]"
+                                    alt="Avatar"
+                                />
+                            </div>
+                        </div>
                     </div>
                 </header>
 
-                {/* Content Area */}
-                <div className="flex-1 overflow-y-auto p-8">
-                    {activeTab === 'dashboard' && (
-                        <div className="space-y-8">
-                            {/* Stats */}
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                                    <div className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">
-                                        TOTAL EDITIONS:
-                                    </div>
-                                    <div className="text-4xl font-bold text-gray-900 dark:text-white">
-                                        {stats.totalEditions}
-                                    </div>
-                                </div>
+                {/* Sub-Header Area for Branding/Actions */}
+                <div className="px-8 pt-8 shrink-0 flex items-center justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold text-white tracking-tight leading-none mb-1">
+                            {location.pathname.includes('dashboard') ? 'Executive Insights' :
+                                location.pathname.includes('editions') ? 'Edition Management' :
+                                    location.pathname.includes('content') ? 'Content Core' :
+                                        'System Preferences'}
+                        </h1>
+                        <p className="text-xs text-gray-500 font-medium">Monitoring newsroom activity in precision-time.</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <button className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-500/20 active:scale-95 flex items-center gap-2">
+                            <Zap size={14} className="fill-current" />
+                            Action Point
+                        </button>
+                    </div>
+                </div>
 
-                                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                                    <div className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">
-                                        ACTIVE EDITIONS:
-                                    </div>
-                                    <div className="text-4xl font-bold text-gray-900 dark:text-white">
-                                        {stats.activeEditions}
-                                    </div>
-                                </div>
-
-                                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                                    <div className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-2">
-                                        <AlertTriangle size={16} className="text-yellow-500" />
-                                        LOW BATTERY:
-                                    </div>
-                                    <div className="text-4xl font-bold text-gray-900 dark:text-white">
-                                        {stats.lowBattery}
-                                    </div>
-                                </div>
-
-                                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                                    <div className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">
-                                        TOTAL READERS:
-                                    </div>
-                                    <div className="text-4xl font-bold text-gray-900 dark:text-white">
-                                        {(stats.totalReaders / 1000).toFixed(1)}k
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* E-Paper First Section */}
-                            <div>
-                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-                                    E-Paper First
-                                </h2>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {filteredEditions.map((edition) => (
-                                        <div
-                                            key={edition.id}
-                                            className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow"
-                                        >
-                                            {/* Header */}
-                                            <div className="mb-4">
-                                                <div className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">
-                                                    EDITION ID: {edition.id}
-                                                </div>
-                                            </div>
-
-                                            {/* Content */}
-                                            <div className="flex gap-4 mb-4">
-                                                {/* Thumbnail */}
-                                                <div className="w-24 h-32 bg-gray-200 dark:bg-gray-700 rounded border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden">
-                                                    <img
-                                                        src={edition.thumbnail}
-                                                        alt={edition.name}
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                </div>
-
-                                                {/* Info */}
-                                                <div className="flex-1 space-y-3">
-                                                    <div>
-                                                        <div className="font-bold text-gray-900 dark:text-white">
-                                                            {edition.name}
-                                                        </div>
-                                                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                            STATUS
-                                                        </div>
-                                                        <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                            {edition.status}
-                                                        </div>
-                                                    </div>
-
-                                                    <div>
-                                                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                            {edition.online ? 'ONLINE' : 'OFFLINE'} ({edition.battery}%)
-                                                        </div>
-                                                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                            {edition.syncTime} min ago
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Footer */}
-                                            <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
-                                                <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                    LAST SYNC: {edition.lastSync}
-                                                </div>
-                                                <button className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded transition-colors">
-                                                    EDIT
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {activeTab === 'editions' && (
-                        <div className="max-w-2xl mx-auto">
-                            <div className="bg-white dark:bg-gray-800 rounded-lg p-8 border border-gray-200 dark:border-gray-700">
-                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-                                    Upload New Edition
-                                </h2>
-                                <ImageUploader onUploadComplete={(url) => console.log('Uploaded:', url)} />
-                            </div>
-                        </div>
-                    )}
-
-                    {activeTab !== 'dashboard' && activeTab !== 'editions' && (
-                        <div className="text-center py-20">
-                            <div className="text-gray-400 text-lg mb-4">
-                                {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Section
-                            </div>
-                            <div className="text-gray-500 text-sm">
-                                This section is under development
-                            </div>
-                        </div>
-                    )}
+                {/* Scrollable Content Area */}
+                <div className="flex-1 overflow-y-auto p-8 pt-6 scroll-smooth">
+                    <AnimatePresence mode="wait">
+                        <Routes location={location} key={location.pathname}>
+                            <Route path="dashboard" element={<Dashboard stats={liveStats} editions={editions} />} />
+                            <Route path="editions" element={<Editions editions={editions} searchQuery={searchQuery} setSearchQuery={setSearchQuery} onEdit={(id) => navigate(`/admin/editions/${id}`)} />} />
+                            <Route path="content" element={<Content />} />
+                            <Route path="analytics" element={<Analytics />} />
+                            <Route path="settings" element={<Settings user={user} />} />
+                            <Route path="editions/:id" element={<EditionEditor />} />
+                        </Routes>
+                    </AnimatePresence>
                 </div>
             </main>
         </div>

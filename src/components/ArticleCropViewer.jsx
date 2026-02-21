@@ -1,178 +1,204 @@
 import React, { useEffect, useState } from 'react';
-import { X, ZoomIn, Maximize2, Info } from 'lucide-react';
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
+import { X, Type, Sparkles, ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, Image as ImageIcon, Search, Quote } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { performOCR } from '../utils/ocrService';
+import { generateArticleCropFromUrl } from '../utils/imageCropper';
 
-const ArticleCropViewer = ({ cropData, onClose }) => {
-    const [fadeIn, setFadeIn] = useState(false);
+const ArticleCropViewer = ({ cropData, onClose, onNext, onPrev, page }) => {
+    const [ocrResult, setOcrResult] = useState(null);
+    const [ocrLoading, setOcrLoading] = useState(false);
+    const [localCropData, setLocalCropData] = useState(null);
+    const [viewMode, setViewMode] = useState('text'); // 'text' or 'image'
 
-    // Trigger fade-in animation when crop data arrives
     useEffect(() => {
-        if (cropData) {
-            // Small delay for smooth transition
-            setTimeout(() => setFadeIn(true), 50);
-        } else {
-            setFadeIn(false);
-        }
-    }, [cropData]);
+        if (!cropData) return;
 
-    if (!cropData) {
-        return (
-            <div className="h-full flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-8">
-                <div className="text-center max-w-sm">
-                    <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 rounded-2xl flex items-center justify-center mx-auto mb-6 animate-pulse">
-                        <ZoomIn size={36} className="text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3">
-                        Article Preview
-                    </h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-4">
-                        Click anywhere on the newspaper page to view a zoomed preview of that section
-                    </p>
-                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 text-xs font-medium rounded-lg border border-blue-100 dark:border-blue-800">
-                        <Info size={14} />
-                        <span>Try clicking on an article headline</span>
-                    </div>
-                </div>
-            </div>
-        );
-    }
+        const processArticle = async () => {
+            setOcrLoading(true);
+            setOcrResult(null);
 
-    const { imageUrl, clickX, clickY, cropX, cropY, cropWidth, cropHeight, naturalWidth, naturalHeight } = cropData;
+            try {
+                let currentCrop = cropData;
+                if (!cropData.imageUrl && page?.imageUrl) {
+                    currentCrop = await generateArticleCropFromUrl(page.imageUrl, cropData.xPct, cropData.yPct);
+                }
+                setLocalCropData(currentCrop);
+
+                const result = await performOCR(currentCrop.imageUrl);
+                setOcrResult(result);
+
+                // If confidence is very low, default to image view
+                if (result.confidence < 50) {
+                    setViewMode('image');
+                } else {
+                    setViewMode('text');
+                }
+            } catch (error) {
+                console.error('❌ Article Processing failed', error);
+                setViewMode('image');
+            } finally {
+                setOcrLoading(false);
+            }
+        };
+
+        processArticle();
+    }, [cropData?.id, cropData?.xPct, cropData?.yPct, page?.imageUrl]);
+
+    if (!cropData) return null;
+
+    const handleDragEnd = (event, info) => {
+        const threshold = 100;
+        if (info.offset.x < -threshold && onNext) onNext();
+        if (info.offset.x > threshold && onPrev) onPrev();
+        if (info.offset.y > threshold) onClose();
+    };
 
     return (
-        <div
-            className={`h-full flex flex-col bg-white dark:bg-gray-900 transition-opacity duration-300 ${fadeIn ? 'opacity-100' : 'opacity-0'
-                }`}
+        <motion.div
+            initial={{ x: 500, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 500, opacity: 0 }}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            onDragEnd={handleDragEnd}
+            className="h-full flex flex-col bg-stone-50 dark:bg-gray-950 overflow-hidden touch-none"
         >
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-white dark:from-blue-900/20 dark:to-gray-900 flex-shrink-0">
+            {/* Industry Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 dark:border-gray-800 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl sticky top-0 z-20">
+                <div className="flex items-center gap-4">
+                    <div className="flex -space-x-2">
+                        <button
+                            onClick={() => setViewMode('text')}
+                            className={`w-9 h-9 rounded-full flex items-center justify-center transition-all border-2 ${viewMode === 'text' ? 'bg-blue-600 border-blue-600 text-white z-10' : 'bg-white dark:bg-gray-800 border-stone-200 dark:border-gray-700 text-stone-400'}`}
+                            title="Reader Mode"
+                        >
+                            <Type size={16} />
+                        </button>
+                        <button
+                            onClick={() => setViewMode('image')}
+                            className={`w-9 h-9 rounded-full flex items-center justify-center transition-all border-2 ${viewMode === 'image' ? 'bg-blue-600 border-blue-600 text-white z-10' : 'bg-white dark:bg-gray-800 border-stone-200 dark:border-gray-700 text-stone-400'}`}
+                            title="Original Image"
+                        >
+                            <ImageIcon size={16} />
+                        </button>
+                    </div>
+                    <div className="h-6 w-px bg-stone-200 dark:bg-gray-800" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-stone-400">
+                        {ocrResult?.confidence ? `AI Confidence: ${ocrResult.confidence.toFixed(1)}%` : 'Processing...'}
+                    </span>
+                </div>
+
                 <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                        <Maximize2 size={16} className="text-white" />
-                    </div>
-                    <div>
-                        <h3 className="font-bold text-gray-900 dark:text-white text-sm">
-                            Article Preview
-                        </h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                            Zoomed Section
-                        </p>
-                    </div>
-                </div>
-                <button
-                    onClick={onClose}
-                    className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-lg transition-colors group"
-                    aria-label="Close preview"
-                    title="Close preview"
-                >
-                    <X size={18} className="text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
-                </button>
-            </div>
-
-            {/* Cropped Image Display */}
-            <div className="flex-1 overflow-auto p-4 bg-gray-50 dark:bg-gray-900">
-                <div className="space-y-4">
-                    {/* Main Preview Image */}
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-lg border border-gray-200 dark:border-gray-700">
-                        <div className="bg-gray-100 dark:bg-gray-900 rounded-lg overflow-hidden">
-                            <img
-                                src={imageUrl}
-                                alt="Article crop preview"
-                                className="w-full h-auto"
-                                style={{
-                                    imageRendering: 'crisp-edges',
-                                    maxWidth: '100%'
-                                }}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Metadata Cards */}
-                    <div className="grid grid-cols-2 gap-3">
-                        {/* Click Position */}
-                        <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/30 dark:to-blue-800/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                            <p className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wide mb-2">
-                                Click Position
-                            </p>
-                            <div className="space-y-1">
-                                <div className="flex items-center justify-between text-xs">
-                                    <span className="text-gray-600 dark:text-gray-400">X:</span>
-                                    <span className="font-mono font-semibold text-gray-900 dark:text-white">{clickX}px</span>
-                                </div>
-                                <div className="flex items-center justify-between text-xs">
-                                    <span className="text-gray-600 dark:text-gray-400">Y:</span>
-                                    <span className="font-mono font-semibold text-gray-900 dark:text-white">{clickY}px</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Crop Area */}
-                        <div className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-900/30 dark:to-emerald-800/20 p-4 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                            <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide mb-2">
-                                Crop Size
-                            </p>
-                            <div className="space-y-1">
-                                <div className="flex items-center justify-between text-xs">
-                                    <span className="text-gray-600 dark:text-gray-400">Width:</span>
-                                    <span className="font-mono font-semibold text-gray-900 dark:text-white">{cropWidth}px</span>
-                                </div>
-                                <div className="flex items-center justify-between text-xs">
-                                    <span className="text-gray-600 dark:text-gray-400">Height:</span>
-                                    <span className="font-mono font-semibold text-gray-900 dark:text-white">{cropHeight}px</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Technical Details (Collapsible) */}
-                    <details className="bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                        <summary className="px-4 py-3 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors font-semibold text-sm text-gray-700 dark:text-gray-300">
-                            Technical Details
-                        </summary>
-                        <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 space-y-2 text-xs">
-                            <div className="flex justify-between">
-                                <span className="text-gray-600 dark:text-gray-400">Crop Origin X:</span>
-                                <span className="font-mono text-gray-900 dark:text-white">{cropX}px</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600 dark:text-gray-400">Crop Origin Y:</span>
-                                <span className="font-mono text-gray-900 dark:text-white">{cropY}px</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600 dark:text-gray-400">Original Image Size:</span>
-                                <span className="font-mono text-gray-900 dark:text-white">{naturalWidth} × {naturalHeight}px</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600 dark:text-gray-400">Method:</span>
-                                <span className="text-gray-900 dark:text-white">Canvas Crop</span>
-                            </div>
-                        </div>
-                    </details>
-
-                    {/* Help Card */}
-                    <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
-                        <div className="flex gap-3">
-                            <Info size={16} className="text-purple-600 dark:text-purple-400 flex-shrink-0 mt-0.5" />
-                            <div>
-                                <p className="text-xs font-semibold text-purple-900 dark:text-purple-200 mb-1">
-                                    Coming Soon: OCR & Article Extraction
-                                </p>
-                                <p className="text-xs text-purple-700 dark:text-purple-300 leading-relaxed">
-                                    Future updates will include automatic text recognition, article metadata,
-                                    headlines, and full-text search capabilities.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Action Hint */}
-                    <div className="text-center pt-2">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                            Click anywhere else on the page to preview another section
-                        </p>
-                    </div>
+                    <button onClick={onPrev} className="p-2.5 hover:bg-stone-100 dark:hover:bg-gray-800 rounded-xl text-stone-400 transition-colors"><ChevronLeft size={20} /></button>
+                    <button onClick={onNext} className="p-2.5 hover:bg-stone-100 dark:hover:bg-gray-800 rounded-xl text-stone-400 transition-colors"><ChevronRight size={20} /></button>
+                    <button onClick={onClose} className="ml-2 w-10 h-10 flex items-center justify-center hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all group">
+                        <X size={20} className="text-stone-400 group-hover:text-red-500" />
+                    </button>
                 </div>
             </div>
-        </div>
+
+            <div className="flex-1 overflow-y-auto">
+                <AnimatePresence mode="wait">
+                    {ocrLoading ? (
+                        <motion.div
+                            key="loader"
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            className="h-full flex flex-col items-center justify-center p-12 text-center"
+                        >
+                            <div className="w-16 h-16 border-4 border-blue-600/10 border-t-blue-600 rounded-full animate-spin mb-6" />
+                            <h4 className="text-sm font-black text-stone-900 dark:text-white uppercase tracking-widest animate-pulse">Analyzing Layout...</h4>
+                            <p className="text-xs text-stone-400 mt-2 font-medium">Extracting columns and headlines</p>
+                        </motion.div>
+                    ) : viewMode === 'text' ? (
+                        <motion.div
+                            key="text-mode"
+                            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                            className="max-w-2xl mx-auto px-8 py-12"
+                        >
+                            {/* Confidence Warning Badges */}
+                            {ocrResult?.isPartial && (
+                                <div className="flex items-center gap-2 px-4 py-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-800 rounded-full mb-8">
+                                    <AlertTriangle size={14} className="text-orange-500" />
+                                    <span className="text-[10px] font-bold text-orange-700 dark:text-orange-400 uppercase tracking-wider">Partial Clarity — Some text may be distorted</span>
+                                </div>
+                            )}
+
+                            {/* Headline Section */}
+                            <header className="mb-10 space-y-4">
+                                <div className="flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase tracking-[0.3em]">
+                                    <Sparkles size={12} /> Verified Headline
+                                </div>
+                                <h1 className="text-4xl font-black text-stone-900 dark:text-white leading-[1.1] tracking-tight">
+                                    {ocrResult?.headline}
+                                </h1>
+                                <div className="w-20 h-1.5 bg-blue-600 rounded-full" />
+                            </header>
+
+                            {/* Body Section */}
+                            <article className="prose prose-stone dark:prose-invert max-w-none">
+                                {ocrResult?.bodyText ? (
+                                    ocrResult.bodyText.split('\n\n').map((para, i) => (
+                                        <p key={i} className="text-lg text-stone-700 dark:text-stone-300 leading-[1.7] mb-6 font-serif hyphens-auto text-justify">
+                                            {para}
+                                        </p>
+                                    ))
+                                ) : (
+                                    <div className="bg-stone-100 dark:bg-gray-900 p-8 rounded-3xl border-2 border-dashed border-stone-200 dark:border-gray-800 text-center">
+                                        <ImageIcon size={32} className="mx-auto mb-4 text-stone-300" />
+                                        <p className="text-sm font-bold text-stone-500">Body text clarity too low. Switch to image mode.</p>
+                                    </div>
+                                )}
+                            </article>
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="image-mode"
+                            initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }}
+                            className="h-full flex flex-col p-4 gap-4"
+                        >
+                            <div className="flex-1 rounded-3xl overflow-hidden border border-stone-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-2xl relative">
+                                <TransformWrapper initialScale={1.1} minScale={0.5} maxScale={4} centerOnInit={true}>
+                                    <TransformComponent wrapperStyle={{ width: '100%', height: '100%' }}>
+                                        <img
+                                            src={localCropData?.imageUrl}
+                                            alt="Original source"
+                                            className="max-w-full h-auto transition-all"
+                                            style={{ imageRendering: 'high-quality' }}
+                                        />
+                                    </TransformComponent>
+                                </TransformWrapper>
+
+                                <div className="absolute inset-x-0 bottom-6 flex justify-center pointer-events-none">
+                                    <div className="bg-stone-900/90 text-[10px] text-white font-bold px-4 py-2 rounded-full flex items-center gap-2 backdrop-blur-md">
+                                        <Search size={12} /> Best Clarity — Original Scan
+                                    </div>
+                                </div>
+                            </div>
+
+                            {ocrResult?.isLowQuality && (
+                                <div className="px-6 py-4 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-2xl flex items-center gap-3">
+                                    <AlertTriangle size={18} className="text-red-500" />
+                                    <div>
+                                        <p className="text-xs font-black text-red-900 dark:text-red-400 uppercase tracking-wider">Low Clarity Detected</p>
+                                        <p className="text-[10px] text-red-600/70 dark:text-red-400/60 font-medium">Text extraction unavailable for this image resolution.</p>
+                                    </div>
+                                </div>
+                            )}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+
+            {/* Premium Navigation Guides (Mobile) */}
+            <div className="px-8 py-6 bg-white dark:bg-gray-900 border-t border-stone-100 dark:border-gray-800 lg:hidden">
+                <div className="flex justify-center items-center gap-4 text-stone-400">
+                    <ChevronLeft size={14} className="animate-pulse" />
+                    <span className="text-[9px] font-black uppercase tracking-[0.3em]">Swipe to navigate</span>
+                    <ChevronRight size={14} className="animate-pulse" />
+                </div>
+            </div>
+        </motion.div>
     );
 };
 

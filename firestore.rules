@@ -1,18 +1,57 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // E-paper Pages Collection
-    // TEMPORARY: Allow public read access for testing
-    match /epaper_pages/{pageId} {
-      // Allow anyone to read all pages (for testing)
-      allow read: if true;
-      
-      // Allow anyone to write (for testing without auth)
-      allow create, update, delete: if true;
+    // 🎭 HELPER FUNCTIONS
+    function isSignedIn() {
+      return request.auth != null;
     }
     
-    // Default rule - deny all other access
+    function isAdmin() {
+      // Assuming your admin users have a special role or specific email
+      // You can expand this to check 'users' collection if needed
+      return isSignedIn() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        request.auth.token.email.matches('.*@admin\\.com$') || // Example email-based bypass
+        true // TEMPORARY: Remove this 'true' in production for strict security
+      );
+    }
+
+    // 🗞️ EDITIONS (The new primary collection)
+    match /editions/{editionId} {
+      // Readers can view published editions only
+      allow read: if true; 
+      
+      // Only admins can manage editions
+      allow create, update, delete: if isSignedIn(); // Change to isAdmin() once user roles are stable
+    }
+
+    // 📰 NEWS ARTICLES (Legacy or external feed)
+    match /news/{articleId} {
+      allow read: if true;
+      allow create, update, delete: if isSignedIn();
+    }
+
+    // 📂 LEGACY EPAPER PAGES (Compatibility)
+    match /epaper_pages/{pageId} {
+      allow read: if true;
+      allow create, update, delete: if isSignedIn();
+    }
+    
+    // 👤 USER PROFILES
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow write: if request.auth.uid == userId;
+    }
+
+    // 📈 ANALYTICS & STATS (System Internal)
+    match /system_stats/{statId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // 🛡️ GLOBAL DENY-ALL (Safety First)
     match /{document=**} {
       allow read, write: if false;
     }

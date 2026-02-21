@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { getPublishedPages, getEditionDates } from './services/epaperService';
+import { motion, AnimatePresence } from 'framer-motion';
+import { db } from './firebase/config';
+import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import PageThumbnailList from './components/PageThumbnailList';
 import PageViewer from './components/PageViewer';
-import ArticleCropViewer from './components/ArticleCropViewer';
+import ArticlePreview from './components/ArticlePreview';
 import { Loader2, Calendar, Globe, Newspaper, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const EpaperReader = () => {
@@ -10,50 +12,97 @@ const EpaperReader = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
-    const [cropData, setCropData] = useState(null);
+    const [selectedArticle, setSelectedArticle] = useState(null);
     const [currentLang, setCurrentLang] = useState('english');
     const [editionDates, setEditionDates] = useState([]);
     const [selectedDate, setSelectedDate] = useState(null);
     const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
     const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
 
-    // Fetch pages from Firestore
+    // Monitor screen size for mobile responsiveness
     useEffect(() => {
-        const fetchPages = async () => {
+        const handleResize = () => {
+            const mobile = window.innerWidth < 1024;
+            setIsMobile(mobile);
+            if (mobile) {
+                setLeftPanelCollapsed(true);
+                setRightPanelCollapsed(true);
+            } else {
+                setLeftPanelCollapsed(false);
+                setRightPanelCollapsed(false);
+            }
+        };
+
+        window.addEventListener('resize', handleResize);
+        handleResize(); // Initial check
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    const [detectedArticles, setDetectedArticles] = useState([]);
+    const [currentArticleIndex, setCurrentArticleIndex] = useState(-1);
+
+    // Fetch edition from Firestore
+    useEffect(() => {
+        const fetchEdition = async () => {
             setLoading(true);
             setError(null);
 
             try {
-                console.log(`🔍 Fetching ${currentLang} pages...`);
-                const fetchedPages = await getPublishedPages(currentLang, selectedDate);
+                console.log(`🔍 Fetching ${currentLang} edition for ${selectedDate}...`);
+                const q = query(
+                    collection(db, 'editions'),
+                    orderBy('createdAt', 'desc')
+                );
 
-                if (fetchedPages.length === 0) {
-                    console.log('ℹ️ No published pages found');
-                    setPages([]);
-                } else {
-                    console.log(`✅ Loaded ${fetchedPages.length} pages`);
-                    setPages(fetchedPages);
+                const querySnapshot = await getDocs(q);
+                let foundEdition = null;
+
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    if (data.language === currentLang) {
+                        if (!selectedDate || data.editionDate === selectedDate) {
+                            if (!foundEdition) foundEdition = { id: doc.id, ...data };
+                        }
+                    }
+                });
+
+                if (foundEdition && foundEdition.pages) {
+                    setPages(foundEdition.pages);
                     setCurrentPageIndex(0);
-                    setCropData(null); // Clear crop when changing edition
+                    setSelectedArticle(null);
+                } else {
+                    setPages([]);
                 }
             } catch (err) {
-                console.error('❌ Error fetching pages:', err);
+                console.error('❌ Error fetching edition:', err);
                 setError(err.message);
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchPages();
+        fetchEdition();
     }, [currentLang, selectedDate]);
 
     // Fetch available edition dates
     useEffect(() => {
         const fetchDates = async () => {
-            const dates = await getEditionDates();
-            setEditionDates(dates);
-            if (dates.length > 0 && !selectedDate) {
-                setSelectedDate(dates[0]);
+            try {
+                const q = query(collection(db, 'editions'), orderBy('createdAt', 'desc'));
+                const snapshot = await getDocs(q);
+                const dates = new Set();
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (data.editionDate) dates.add(data.editionDate);
+                });
+                const sortedDates = Array.from(dates).sort().reverse();
+                setEditionDates(sortedDates);
+                if (sortedDates.length > 0 && !selectedDate) {
+                    setSelectedDate(sortedDates[0]);
+                }
+            } catch (err) {
+                console.error("Error fetching dates:", err);
             }
         };
         fetchDates();
@@ -64,18 +113,18 @@ const EpaperReader = () => {
     const handlePageSelect = (index) => {
         if (index >= 0 && index < pages.length) {
             setCurrentPageIndex(index);
-            setCropData(null); // Clear crop when changing page
+            setSelectedArticle(null); // Clear selected article when changing page
         }
     };
 
-    const handlePageClick = (clickData) => {
-        setCropData(clickData);
+    const handleArticleClick = (article) => {
+        setSelectedArticle(article);
         setRightPanelCollapsed(false); // Auto-expand right panel
     };
 
     const handleLanguageToggle = () => {
         setCurrentLang(prev => prev === 'english' ? 'urdu' : 'english');
-        setCropData(null);
+        setSelectedArticle(null);
     };
 
     const goToNextPage = () => {
@@ -241,41 +290,109 @@ const EpaperReader = () => {
 
             {/* 3-Panel Layout */}
             <div className="flex-1 flex overflow-hidden">
-                {/* LEFT PANEL - Page Thumbnails */}
+                {/* LEFT PANEL - Page Thumbnails (Desktop side, Mobile hidden by default) */}
                 <aside
-                    className={`bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 overflow-y-auto transition-all duration-300 ${leftPanelCollapsed ? 'w-0' : 'w-64'
+                    className={`bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 overflow-y-auto transition-all duration-300 ${isMobile
+                        ? (leftPanelCollapsed ? 'w-0' : 'fixed inset-0 z-50 w-3/4')
+                        : (leftPanelCollapsed ? 'w-0' : 'w-64')
                         }`}
                 >
-                    {!leftPanelCollapsed && (
+                    {(!leftPanelCollapsed || isMobile === false) && (
                         <PageThumbnailList
                             pages={pages}
                             activePageIndex={currentPageIndex}
-                            onPageSelect={handlePageSelect}
+                            onPageSelect={(idx) => {
+                                handlePageSelect(idx);
+                                if (isMobile) setLeftPanelCollapsed(true);
+                            }}
                         />
                     )}
                 </aside>
 
                 {/* CENTER PANEL - Full Page Viewer */}
-                <main className="flex-1 overflow-hidden relative">
+                <main className={`flex-1 overflow-hidden relative ${isMobile ? 'w-full' : ''}`}>
+                    {/* Mobile Thumbnail Toggle */}
+                    {isMobile && (
+                        <button
+                            onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
+                            className="absolute bottom-20 left-4 z-20 p-3 bg-white/90 dark:bg-gray-800/90 rounded-full shadow-lg border border-gray-200 dark:border-gray-700"
+                        >
+                            <ChevronRight size={24} className={`${leftPanelCollapsed ? '' : 'rotate-180'} transition-transform`} />
+                        </button>
+                    )}
+
                     <PageViewer
                         page={currentPage}
-                        onPageClick={handlePageClick}
+                        onArticleClick={handleArticleClick}
                     />
                 </main>
 
-                {/* RIGHT PANEL - Article Crop Viewer */}
-                <aside
-                    className={`bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300 ${rightPanelCollapsed ? 'w-0' : 'w-96'
-                        }`}
-                >
-                    {!rightPanelCollapsed && (
-                        <ArticleCropViewer
-                            cropData={cropData}
-                            onClose={() => setCropData(null)}
-                        />
-                    )}
-                </aside>
+                {/* RIGHT PANEL - Article Preview (Desktop Only) */}
+                {!isMobile && (
+                    <aside
+                        className={`bg-[#0B0F19] border-l border-white/5 overflow-hidden transition-all duration-500 shadow-2xl z-30 ${rightPanelCollapsed || !selectedArticle ? 'w-0' : 'w-[500px]'
+                            }`}
+                    >
+                        {selectedArticle && (
+                            <ArticlePreview
+                                article={selectedArticle}
+                                onClose={() => setSelectedArticle(null)}
+                                onNext={() => {
+                                    const arts = currentPage.articles || [];
+                                    const currentIdx = arts.findIndex(a => a.id === selectedArticle.id);
+                                    if (currentIdx < arts.length - 1) setSelectedArticle(arts[currentIdx + 1]);
+                                }}
+                                onPrev={() => {
+                                    const arts = currentPage.articles || [];
+                                    const currentIdx = arts.findIndex(a => a.id === selectedArticle.id);
+                                    if (currentIdx > 0) setSelectedArticle(arts[currentIdx - 1]);
+                                }}
+                            />
+                        )}
+                    </aside>
+                )}
             </div>
+
+            {/* MOBILE MODAL - Article Preview */}
+            <AnimatePresence>
+                {isMobile && selectedArticle && (
+                    <div className="fixed inset-0 z-[60] flex items-end justify-center">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-black/80 backdrop-blur-md"
+                            onClick={() => setSelectedArticle(null)}
+                        />
+
+                        <motion.div
+                            initial={{ y: '100%' }}
+                            animate={{ y: 0 }}
+                            exit={{ y: '100%' }}
+                            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                            className="relative w-full max-h-[90vh] bg-[#0B0F19] rounded-t-[3rem] shadow-2xl overflow-hidden border-t border-white/5"
+                        >
+                            <div className="w-16 h-1.5 bg-white/10 rounded-full mx-auto my-6" />
+                            <div className="h-[calc(90vh-100px)]">
+                                <ArticlePreview
+                                    article={selectedArticle}
+                                    onClose={() => setSelectedArticle(null)}
+                                    onNext={() => {
+                                        const arts = currentPage.articles || [];
+                                        const currentIdx = arts.findIndex(a => a.id === selectedArticle.id);
+                                        if (currentIdx < arts.length - 1) setSelectedArticle(arts[currentIdx + 1]);
+                                    }}
+                                    onPrev={() => {
+                                        const arts = currentPage.articles || [];
+                                        const currentIdx = arts.findIndex(a => a.id === selectedArticle.id);
+                                        if (currentIdx > 0) setSelectedArticle(arts[currentIdx - 1]);
+                                    }}
+                                />
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };

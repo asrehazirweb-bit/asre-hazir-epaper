@@ -1,199 +1,152 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
-import { ZoomIn, ZoomOut, Maximize, RotateCcw, Home, MousePointer2 } from 'lucide-react';
-import { generateArticleCrop, isImageReady } from '../utils/imageCropper';
+import { Maximize, MousePointer2, Newspaper, ZoomIn, ZoomOut, RefreshCw } from 'lucide-react';
 
-const PageViewer = ({ page, onPageClick }) => {
-    const imageRef = useRef(null);
+const PageViewer = ({ page, onArticleClick }) => {
+    const transformComponentRef = useRef(null);
     const [imageLoaded, setImageLoaded] = useState(false);
-    const [processing, setProcessing] = useState(false);
+    const [scale, setScale] = useState(1);
 
+    // If no page is provided, show a placeholder
     if (!page) {
         return (
-            <div className="h-full flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-                <div className="text-center">
-                    <div className="w-16 h-16 bg-gray-200 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Home size={32} className="text-gray-400" />
+            <div className="h-full flex items-center justify-center bg-[#0B0F19]">
+                <div className="text-center animate-pulse">
+                    <div className="w-20 h-20 bg-white/5 rounded-[2rem] flex items-center justify-center mx-auto mb-6 border border-white/5">
+                        <Newspaper size={40} className="text-gray-700" />
                     </div>
-                    <p className="text-gray-500 dark:text-gray-400 font-medium">
-                        Select a page to view
+                    <p className="text-sm text-gray-500 font-bold uppercase tracking-[0.2em]">
+                        Select Edition Page
                     </p>
                 </div>
             </div>
         );
     }
 
-    const handleImageClick = async (e) => {
-        // CRITICAL: Stop event propagation to prevent zoom behavior
-        e.stopPropagation();
-        e.preventDefault();
-
-        // Prevent click during processing or if image not ready
-        if (processing || !imageRef.current || !onPageClick) return;
-
-        if (!isImageReady(imageRef.current)) {
-            console.warn('⚠️ Image not fully loaded yet');
-            return;
-        }
-
-        setProcessing(true);
-
-        try {
-            // Get click coordinates relative to the image element
-            const rect = imageRef.current.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            const clickY = e.clientY - rect.top;
-
-            console.log('🎯 Processing click at:', { clickX, clickY });
-
-            // Generate cropped image using canvas
-            const cropData = await generateArticleCrop(imageRef.current, clickX, clickY);
-
-            console.log('✅ Crop data ready:', cropData);
-
-            // Pass crop data to parent component
-            onPageClick(cropData);
-
-        } catch (error) {
-            console.error('❌ Error processing click:', error);
-        } finally {
-            setProcessing(false);
-        }
-    };
-
     const handleImageLoad = () => {
-        console.log('📄 Page image loaded:', page.pageNumber);
         setImageLoaded(true);
     };
 
+    const handleHotspotClick = (article) => {
+        if (onArticleClick) {
+            onArticleClick(article);
+        }
+    };
+
     return (
-        <div className="h-full flex flex-col bg-white dark:bg-gray-900">
-            {/* Page Info Bar */}
-            <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h3 className="font-bold text-gray-900 dark:text-white text-sm">
-                            {page.title || `Page ${page.pageNumber}`}
-                        </h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {page.editionDate && new Date(page.editionDate).toLocaleDateString('en-US', {
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric'
-                            })}
-                        </p>
+        <div className="h-full flex flex-col bg-[#0B0F19] overflow-hidden select-none">
+            {/* Professional Page Info Bar */}
+            <div className="px-8 py-4 glass-panel border-b border-white/5 flex-shrink-0 z-20 flex items-center justify-between">
+                <div className="flex items-center gap-6">
+                    <div className="px-4 py-1 bg-blue-600 text-white text-[10px] font-black rounded-lg uppercase tracking-widest shadow-lg shadow-blue-500/20">
+                        Page {page.pageNumber}
                     </div>
-                    <div className="flex items-center gap-2">
-                        <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs font-semibold rounded">
-                            Page {page.pageNumber}
-                        </span>
-                        <span className="px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-medium rounded capitalize">
-                            {page.language}
-                        </span>
+                    <h3 className="font-bold text-white text-xs uppercase tracking-[0.2em] italic">
+                        {page.title || `Industrial Feed`}
+                    </h3>
+                </div>
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Precision Rendering</span>
                     </div>
                 </div>
             </div>
 
-            {/* Viewer */}
-            <div className="flex-1 overflow-hidden relative bg-gray-100 dark:bg-gray-900">
+            {/* Main Interactive Canvas */}
+            <div className="flex-1 relative bg-[#020617] overflow-hidden">
                 <TransformWrapper
+                    ref={transformComponentRef}
                     initialScale={1}
-                    minScale={0.3}
-                    maxScale={5}
+                    minScale={1}
+                    maxScale={8}
                     centerOnInit={true}
-                    limitToBounds={false}
+                    limitToBounds={true}
                     doubleClick={{ disabled: true }}
-                    panning={{ disabled: false }}
-                    wheel={{ step: 0.1, smoothStep: 0.01 }}
+                    wheel={{ step: 0.1 }}
+                    onTransformed={(p) => setScale(p.state.scale)}
                 >
                     {({ zoomIn, zoomOut, resetTransform }) => (
                         <>
-                            {/* Zoom Controls */}
-                            <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
-                                <button
-                                    onClick={() => zoomIn()}
-                                    className="p-2.5 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 transition-colors"
-                                    title="Zoom In"
-                                >
-                                    <ZoomIn size={18} className="text-gray-700 dark:text-gray-300" />
+                            {/* Controls Overlay */}
+                            <div className="absolute bottom-10 right-10 z-30 flex flex-col gap-3">
+                                <button onClick={() => zoomIn()} className="w-12 h-12 bg-white/5 hover:bg-white/10 backdrop-blur-xl border border-white/10 rounded-2xl flex items-center justify-center text-gray-400 hover:text-white transition-all shadow-2xl">
+                                    <ZoomIn size={20} />
                                 </button>
-                                <button
-                                    onClick={() => zoomOut()}
-                                    className="p-2.5 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 transition-colors"
-                                    title="Zoom Out"
-                                >
-                                    <ZoomOut size={18} className="text-gray-700 dark:text-gray-300" />
+                                <button onClick={() => zoomOut()} className="w-12 h-12 bg-white/5 hover:bg-white/10 backdrop-blur-xl border border-white/10 rounded-2xl flex items-center justify-center text-gray-400 hover:text-white transition-all shadow-2xl">
+                                    <ZoomOut size={20} />
                                 </button>
-                                <button
-                                    onClick={() => resetTransform()}
-                                    className="p-2.5 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 transition-colors"
-                                    title="Reset View"
-                                >
-                                    <RotateCcw size={18} className="text-gray-700 dark:text-gray-300" />
-                                </button>
-                                <button
-                                    className="p-2.5 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 transition-colors"
-                                    title="Fullscreen"
-                                >
-                                    <Maximize size={18} className="text-gray-700 dark:text-gray-300" />
+                                <button onClick={() => resetTransform()} className="w-12 h-12 bg-white/5 hover:bg-white/10 backdrop-blur-xl border border-white/10 rounded-2xl flex items-center justify-center text-gray-400 hover:text-white transition-all shadow-2xl">
+                                    <RefreshCw size={20} />
                                 </button>
                             </div>
 
-                            {/* Loading Indicator */}
-                            {!imageLoaded && (
-                                <div className="absolute inset-0 flex items-center justify-center z-20">
-                                    <div className="text-center bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
-                                        <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-                                        <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">Loading page...</p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Processing Indicator */}
-                            {processing && (
-                                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-30">
-                                    <div className="bg-black/80 text-white px-6 py-3 rounded-lg shadow-xl flex items-center gap-3">
-                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                        <span className="text-sm font-medium">Generating preview...</span>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Page Image */}
                             <TransformComponent
-                                wrapperStyle={{ width: '100%', height: '100%' }}
-                                contentStyle={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    cursor: imageLoaded ? 'crosshair' : 'default'
-                                }}
+                                wrapperClassName="!w-full !h-full"
+                                contentClassName="!w-full !h-full flex items-center justify-center"
                             >
-                                <img
-                                    ref={imageRef}
-                                    src={page.imageUrl}
-                                    alt={`Page ${page.pageNumber}`}
-                                    title="Click to preview article"
-                                    onClick={handleImageClick}
-                                    onLoad={handleImageLoad}
-                                    className="max-w-full max-h-full shadow-2xl select-none"
-                                    style={{
-                                        maxHeight: '90vh',
-                                        objectFit: 'contain',
-                                        cursor: imageLoaded ? 'crosshair' : 'wait'
-                                    }}
-                                    crossOrigin="anonymous"
-                                />
+                                <div className="relative group shadow-[0_0_100px_rgba(0,0,0,0.5)] bg-white">
+                                    <img
+                                        src={page.imageUrl}
+                                        alt="Newspaper Page"
+                                        onLoad={handleImageLoad}
+                                        className={`max-w-none transition-opacity duration-1000 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                                        style={{
+                                            height: '85vh', // High production fit
+                                            width: 'auto',
+                                            pointerEvents: 'none'
+                                        }}
+                                        crossOrigin="anonymous"
+                                    />
+
+                                    {/* 🎯 AREA MAPPING LAYER (HOTSPOTS) 🎯 */}
+                                    {imageLoaded && page.articles && page.articles.map((art) => (
+                                        <div
+                                            key={art.id}
+                                            className={`absolute border border-transparent hover:border-blue-500/50 hover:bg-blue-500/10 cursor-pointer transition-all z-20 group/hotspot ${art.verified ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                                            title={art.headline}
+                                            style={{
+                                                left: `${art.rect.x}%`,
+                                                top: `${art.rect.y}%`,
+                                                width: `${art.rect.w}%`,
+                                                height: `${art.rect.h}%`
+                                            }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleHotspotClick(art);
+                                            }}
+                                        >
+                                            {/* Minimalist selection indicator */}
+                                            <div className="absolute inset-0 opacity-0 group-hover/hotspot:opacity-100 flex items-center justify-center">
+                                                <div className="px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded uppercase tracking-widest shadow-2xl">
+                                                    Read Article
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </TransformComponent>
                         </>
                     )}
                 </TransformWrapper>
 
-                {/* Click Hint */}
-                {imageLoaded && !processing && (
-                    <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-medium rounded-full shadow-xl backdrop-blur-sm animate-pulse flex items-center gap-2">
-                        <MousePointer2 size={16} />
-                        Click to preview article • Use buttons or scroll to zoom
+                {/* Industrial Status Indicator */}
+                {!imageLoaded && (
+                    <div className="absolute inset-0 flex items-center justify-center z-50 bg-[#0B0F19]">
+                        <div className="flex flex-col items-center gap-6">
+                            <div className="w-16 h-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
+                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em] animate-pulse">Syncing Resolution...</p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Guide Overlay */}
+                {imageLoaded && (
+                    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-30 pointer-events-none hidden md:block">
+                        <div className="px-6 py-3 glass-panel border border-white/5 rounded-2xl flex items-center gap-4 text-gray-400">
+                            <MousePointer2 size={16} />
+                            <span className="text-[10px] font-bold uppercase tracking-widest">Scroll to Zoom • Pan when Enlarged</span>
+                        </div>
                     </div>
                 )}
             </div>

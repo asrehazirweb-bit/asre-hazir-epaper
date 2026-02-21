@@ -3,48 +3,44 @@
  * Captures click coordinates and generates cropped image data URL
  */
 
-const CROP_WIDTH = 400;
-const CROP_HEIGHT = 500;
+// DYNAMIC CROP SIZES (Balanced for Headline + Body)
+const CROP_WIDTH_PCT = 0.35; // 35% of natural width
+const CROP_HEIGHT_PCT = 0.38; // 38% of natural height (Vertical slice for columns)
 
 /**
- * Generate cropped image from click coordinates
+ * Generate cropped image from click coordinates (percentages)
  * @param {HTMLImageElement} imgElement - The newspaper page image element
- * @param {number} clickX - Click X coordinate (screen space)
- * @param {number} clickY - Click Y coordinate (screen space)
+ * @param {number} xPct - Click X as percentage (0 to 1)
+ * @param {number} yPct - Click Y as percentage (0 to 1)
  * @returns {Promise<Object>} - Cropped image data and metadata
  */
-export const generateArticleCrop = async (imgElement, clickX, clickY) => {
+export const generateArticleCrop = async (imgElement, xPct, yPct) => {
     return new Promise((resolve, reject) => {
         try {
-            // Get bounding rect for scaling calculations
-            const rect = imgElement.getBoundingClientRect();
+            const naturalWidth = imgElement.naturalWidth;
+            const naturalHeight = imgElement.naturalHeight;
 
-            // Calculate scale factors from displayed size to natural size
-            const scaleX = imgElement.naturalWidth / rect.width;
-            const scaleY = imgElement.naturalHeight / rect.height;
+            // Calculate dynamic crop dimensions
+            const cropWidth = Math.round(naturalWidth * CROP_WIDTH_PCT);
+            const cropHeight = Math.round(naturalHeight * CROP_HEIGHT_PCT);
 
-            // Convert click coordinates to real image coordinates
-            const realX = clickX * scaleX;
-            const realY = clickY * scaleY;
+            // Calculate real image coordinates from percentages
+            const realX = xPct * naturalWidth;
+            const realY = yPct * naturalHeight;
 
-            console.log('🖱️ Click captured:', { clickX, clickY });
-            console.log('📐 Scaled coordinates:', { realX, realY });
-            console.log('📏 Image dimensions:', {
-                displayed: { width: rect.width, height: rect.height },
-                natural: { width: imgElement.naturalWidth, height: imgElement.naturalHeight }
-            });
+            console.log('🖱️ Click captured:', { xPct, yPct, realX, realY });
 
             // Calculate crop area centered on click point
-            let cropX = Math.round(realX - CROP_WIDTH / 2);
-            let cropY = Math.round(realY - CROP_HEIGHT / 2);
+            let cropX = Math.round(realX - cropWidth / 2);
+            let cropY = Math.round(realY - cropHeight / 2);
 
             // Ensure crop stays within image bounds
-            cropX = Math.max(0, Math.min(cropX, imgElement.naturalWidth - CROP_WIDTH));
-            cropY = Math.max(0, Math.min(cropY, imgElement.naturalHeight - CROP_HEIGHT));
+            cropX = Math.max(0, Math.min(cropX, naturalWidth - cropWidth));
+            cropY = Math.max(0, Math.min(cropY, naturalHeight - cropHeight));
 
             // Adjust crop dimensions if they exceed image bounds
-            const actualCropWidth = Math.min(CROP_WIDTH, imgElement.naturalWidth - cropX);
-            const actualCropHeight = Math.min(CROP_HEIGHT, imgElement.naturalHeight - cropY);
+            const actualCropWidth = Math.min(cropWidth, naturalWidth - cropX);
+            const actualCropHeight = Math.min(cropHeight, naturalHeight - cropY);
 
             console.log('✂️ Crop area:', { cropX, cropY, actualCropWidth, actualCropHeight });
 
@@ -82,6 +78,8 @@ export const generateArticleCrop = async (imgElement, clickX, clickY) => {
                 cropY,
                 cropWidth: actualCropWidth,
                 cropHeight: actualCropHeight,
+                xPct,
+                yPct,
                 clickX: Math.round(realX),
                 clickY: Math.round(realY),
                 naturalWidth: imgElement.naturalWidth,
@@ -92,6 +90,21 @@ export const generateArticleCrop = async (imgElement, clickX, clickY) => {
             console.error('❌ Error generating crop:', error);
             reject(error);
         }
+    });
+};
+
+/**
+ * Helper to generate crop from a URL (used for swiping navigation)
+ */
+export const generateArticleCropFromUrl = async (url, xPct, yPct) => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            generateArticleCrop(img, xPct, yPct).then(resolve).catch(reject);
+        };
+        img.onerror = reject;
+        img.src = url;
     });
 };
 

@@ -25,8 +25,8 @@ const AdminPanel = ({ onBack }) => {
         }
     };
 
-    // Bypass logic for testing
-    const [isTestBypass, setIsTestBypass] = useState(true);
+    // Enforce real security logic
+    const [isTestBypass, setIsTestBypass] = useState(false);
 
     if (loading && !isTestBypass) {
         return (
