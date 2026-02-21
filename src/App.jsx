@@ -28,13 +28,11 @@ function App() {
           {/* Login Screen (using AdminPanel's logic) */}
           <Route path="/login" element={<AdminPanel onBack={() => window.location.href = '/'} />} />
 
-          {/* Protected Admin Routing */}
+          {/* Protected Admin Routing (Bypassed for testing) */}
           <Route
             path="/admin/*"
             element={
-              <AdminGuard>
-                <AdminPanel onBack={() => window.location.href = '/'} />
-              </AdminGuard>
+              <AdminPanel onBack={() => window.location.href = '/'} />
             }
           />
         </Routes>

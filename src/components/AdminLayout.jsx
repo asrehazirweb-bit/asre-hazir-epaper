@@ -1,153 +1,372 @@
 import React, { useState, useEffect } from 'react';
-import { auth } from '../firebase/config';
-import { LogOut, ChevronLeft, LayoutDashboard, Upload, FileText, Settings, ShieldCheck, Zap } from 'lucide-react';
+import { auth, db } from '../firebase/config';
+import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import {
+    LogOut,
+    LayoutDashboard,
+    Upload,
+    FileText,
+    Settings,
+    Search,
+    RefreshCw,
+    User,
+    Newspaper,
+    Clock,
+    Eye,
+    AlertTriangle,
+    TrendingUp,
+    Edit,
+    Home,
+    Monitor,
+    BarChart3,
+    Layers
+} from 'lucide-react';
 import ImageUploader from './ImageUploader';
 
-const AdminLayout = ({ onBack }) => {
+const AdminLayout = ({ onBack, user }) => {
     const [activeTab, setActiveTab] = useState('dashboard');
-    const [user, setUser] = useState(auth.currentUser);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [editions, setEditions] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [previewMode, setPreviewMode] = useState(false);
+
+    // Mock data for demonstration - replace with real Firestore data
+    const mockEditions = [
+        {
+            id: 'ED-001',
+            name: 'Morning Edition',
+            status: 'PUBLISHED',
+            online: true,
+            battery: 85,
+            lastSync: '2 min ago',
+            syncTime: 103,
+            thumbnail: 'https://via.placeholder.com/200x280/333/fff?text=Front+Page',
+            pages: 24,
+            readers: 1234
+        },
+        {
+            id: 'ED-002',
+            name: 'Evening Edition',
+            status: 'PUBLISHED',
+            online: true,
+            battery: 78,
+            lastSync: '5 min ago',
+            syncTime: 98,
+            thumbnail: 'https://via.placeholder.com/200x280/444/fff?text=Evening',
+            pages: 20,
+            readers: 987
+        },
+        {
+            id: 'ED-003',
+            name: 'Weekend Special',
+            status: 'DRAFT',
+            online: false,
+            battery: 45,
+            lastSync: '103 min ago',
+            syncTime: 45,
+            thumbnail: 'https://via.placeholder.com/200x280/555/fff?text=Weekend',
+            pages: 32,
+            readers: 2341
+        },
+        {
+            id: 'ED-004',
+            name: 'Sports Section',
+            status: 'PUBLISHED',
+            online: true,
+            battery: 92,
+            lastSync: '1 min ago',
+            syncTime: 156,
+            thumbnail: 'https://via.placeholder.com/200x280/666/fff?text=Sports',
+            pages: 16,
+            readers: 1567
+        },
+        {
+            id: 'ED-005',
+            name: 'Business Daily',
+            status: 'PUBLISHED',
+            online: true,
+            battery: 67,
+            lastSync: '8 min ago',
+            syncTime: 203,
+            thumbnail: 'https://via.placeholder.com/200x280/777/fff?text=Business',
+            pages: 18,
+            readers: 2109
+        },
+        {
+            id: 'ED-006',
+            name: 'Sunday Magazine',
+            status: 'SCHEDULED',
+            online: false,
+            battery: 34,
+            lastSync: '120 min ago',
+            syncTime: 34,
+            thumbnail: 'https://via.placeholder.com/200x280/888/fff?text=Magazine',
+            pages: 48,
+            readers: 3456
+        }
+    ];
+
+    useEffect(() => {
+        setEditions(mockEditions);
+    }, []);
 
     const handleLogout = async () => {
         await auth.signOut();
         onBack();
     };
 
+    const handleSyncAll = () => {
+        setLoading(true);
+        setTimeout(() => {
+            setLoading(false);
+            alert('All editions synced successfully!');
+        }, 2000);
+    };
+
+    const filteredEditions = editions.filter(edition =>
+        edition.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        edition.id.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    const stats = {
+        totalEditions: editions.length,
+        activeEditions: editions.filter(e => e.status === 'PUBLISHED').length,
+        lowBattery: editions.filter(e => e.battery < 50).length,
+        totalReaders: editions.reduce((sum, e) => sum + e.readers, 0)
+    };
+
     const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
-        { id: 'upload', label: 'Upload Pages', icon: <Upload size={18} /> },
-        { id: 'manage', label: 'Manage Editions', icon: <FileText size={18} /> },
+        { id: 'editions', label: 'Editions', icon: <Newspaper size={18} /> },
+        { id: 'content', label: 'Content', icon: <Layers size={18} /> },
+        { id: 'templates', label: 'Templates', icon: <Monitor size={18} /> },
+        { id: 'analytics', label: 'Analytics', icon: <BarChart3 size={18} /> },
+        { id: 'settings', label: 'Settings', icon: <Settings size={18} /> },
     ];
 
     return (
-        <div className="flex h-screen bg-[#f8f9fa] transition-colors duration-500 font-sans">
+        <div className="flex h-screen bg-gray-100 dark:bg-gray-900 font-sans overflow-hidden">
             {/* Sidebar */}
-            <aside className="w-72 bg-white border-r border-gray-100 flex flex-col shadow-xl z-20">
-                <div className="p-8 border-b border-gray-50 flex items-center gap-3">
-                    <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center shadow-lg shadow-slate-900/20">
-                        <ShieldCheck className="text-white" size={24} />
-                    </div>
-                    <div>
-                        <h2 className="text-lg font-black text-gray-900 uppercase tracking-tighter leading-none">E-Paper</h2>
-                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Admin Desk</span>
-                    </div>
+            <aside className="w-64 bg-gray-800 dark:bg-gray-950 flex flex-col">
+                {/* Brand */}
+                <div className="h-20 flex items-center justify-center border-b border-gray-700">
+                    <h1 className="text-3xl font-bold text-white tracking-wider">EPAPER</h1>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-4 py-8 space-y-8">
-                    <div>
-                        <p className="px-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Operations</p>
-                        <nav className="space-y-1.5">
-                            {navItems.map((item) => (
-                                <button
-                                    key={item.id}
-                                    onClick={() => setActiveTab(item.id)}
-                                    className={`w-full flex items-center space-x-3 px-4 py-3.5 rounded-2xl transition-all duration-300 group ${activeTab === item.id
-                                        ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20'
-                                        : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
-                                        }`}
-                                >
-                                    <span className={`${activeTab === item.id ? 'text-white' : 'group-hover:text-slate-900'} transition-colors`}>
-                                        {item.icon}
-                                    </span>
-                                    <span className="text-sm font-bold tracking-tight">{item.label}</span>
-                                </button>
-                            ))}
-                        </nav>
-                    </div>
-
-                    <div>
-                        <p className="px-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Platform</p>
-                        <nav className="space-y-1.5">
-                            <button onClick={onBack} className="w-full flex items-center space-x-3 px-4 py-3.5 rounded-2xl text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-all group">
-                                <ChevronLeft size={18} className="group-hover:text-slate-900 transition-colors" />
-                                <span className="text-sm font-bold tracking-tight">Exit Admin</span>
-                            </button>
-                            <button className="w-full flex items-center space-x-3 px-4 py-3.5 rounded-2xl text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-all group cursor-not-allowed opacity-50">
-                                <Settings size={18} />
-                                <span className="text-sm font-bold tracking-tight">System Config</span>
-                            </button>
-                        </nav>
-                    </div>
-                </div>
-
-                <div className="p-6 border-t border-gray-50 bg-gray-50/50">
-                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm mb-4">
-                        <div className="flex items-center gap-3">
-                            <img src={user?.photoURL} alt="" className="w-10 h-10 rounded-full border border-gray-200" />
-                            <div className="overflow-hidden">
-                                <p className="text-sm font-black text-gray-900 truncate uppercase tracking-tight">{user?.displayName || 'Admin'}</p>
-                                <p className="text-[10px] text-green-500 font-bold flex items-center gap-1 uppercase tracking-widest">
-                                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> Authorized
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                    <button
-                        onClick={handleLogout}
-                        className="w-full flex items-center justify-center space-x-2 p-3.5 rounded-2xl bg-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600 transition-all font-black uppercase tracking-widest text-[10px]"
-                    >
-                        <LogOut size={16} />
-                        <span>Sign Out Account</span>
-                    </button>
-                </div>
+                {/* Navigation */}
+                <nav className="flex-1 py-6 space-y-1">
+                    {navItems.map((item) => (
+                        <button
+                            key={item.id}
+                            onClick={() => setActiveTab(item.id)}
+                            className={`w-full flex items-center gap-3 px-6 py-3 text-sm font-medium transition-all ${activeTab === item.id
+                                    ? 'bg-blue-600 text-white'
+                                    : 'text-gray-400 hover:bg-gray-700 hover:text-white'
+                                }`}
+                        >
+                            <Home size={18} />
+                            <span>{item.label}</span>
+                        </button>
+                    ))}
+                </nav>
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 overflow-y-auto relative z-10 transition-all duration-500 pt-8 px-8 pb-12">
-                <div className="max-w-6xl mx-auto">
-                    <div className="flex items-center justify-between mb-8 pb-6 border-b border-gray-200/50">
-                        <div className="flex items-center gap-2 text-[10px] uppercase font-black tracking-[0.2em] text-gray-400">
-                            <span>Admin</span>
-                            <span className="text-slate-900">/</span>
-                            <span className="text-gray-900 italic">{activeTab}</span>
+            <main className="flex-1 flex flex-col overflow-hidden">
+                {/* Top Bar */}
+                <header className="h-20 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-8">
+                    <div className="flex items-center gap-6">
+                        {/* Preview Toggle */}
+                        <div className="flex items-center gap-3">
+                            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                PREVIEW ON DEVICE
+                            </span>
+                            <button
+                                onClick={() => setPreviewMode(!previewMode)}
+                                className={`relative w-12 h-6 rounded-full transition-colors ${previewMode ? 'bg-blue-600' : 'bg-gray-300'
+                                    }`}
+                            >
+                                <span
+                                    className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${previewMode ? 'transform translate-x-6' : ''
+                                        }`}
+                                />
+                            </button>
                         </div>
-                        <div className="flex items-center gap-4">
-                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 bg-gray-100 px-3 py-1.5 rounded-full">v2.0.1 Stable</span>
-                            <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-blue-400 shadow-lg">
-                                <Zap size={14} fill="currentColor" />
-                            </div>
+
+                        {/* Search */}
+                        <div className="relative w-80">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                            <input
+                                type="text"
+                                placeholder="Search by Edition ID..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
                         </div>
+
+                        {/* Sync Button */}
+                        <button
+                            onClick={handleSyncAll}
+                            disabled={loading}
+                            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm flex items-center gap-2 transition-all disabled:opacity-50"
+                        >
+                            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                            SYNC ALL DEVICES
+                        </button>
                     </div>
 
+                    {/* User Profile */}
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
+                            <User size={18} className="text-blue-600" />
+                        </div>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {user?.displayName || 'Admin User'}
+                        </span>
+                        <button
+                            onClick={handleLogout}
+                            className="ml-4 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                        >
+                            <LogOut size={18} className="text-gray-600 dark:text-gray-400" />
+                        </button>
+                    </div>
+                </header>
+
+                {/* Content Area */}
+                <div className="flex-1 overflow-y-auto p-8">
                     {activeTab === 'dashboard' && (
-                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                            <div className="bg-white p-12 rounded-[2rem] border border-gray-100 shadow-sm relative overflow-hidden">
-                                <div className="relative z-10">
-                                    <h1 className="text-5xl font-black text-slate-900 mb-4 tracking-tighter uppercase italic">Welcome to <span className="text-blue-600">E-Paper Desk</span></h1>
-                                    <p className="text-gray-500 text-lg max-w-xl">Manage your digital publication archives and upload new editions with high fidelity zoom-and-pan capabilities.</p>
-                                    <div className="mt-10">
-                                        <button onClick={() => setActiveTab('upload')} className="bg-slate-900 text-white px-8 py-4 rounded-xl font-bold text-sm hover:bg-blue-600 transition-all shadow-xl shadow-slate-900/20">
-                                            Start New Upload
-                                        </button>
+                        <div className="space-y-8">
+                            {/* Stats */}
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                    <div className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">
+                                        TOTAL EDITIONS:
+                                    </div>
+                                    <div className="text-4xl font-bold text-gray-900 dark:text-white">
+                                        {stats.totalEditions}
                                     </div>
                                 </div>
-                                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/5 rounded-full -mr-32 -mt-32 blur-3xl"></div>
-                            </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                {[
-                                    { label: 'Total Pages', value: '12', color: 'bg-blue-600' },
-                                    { label: 'Active Editions', value: '0', color: 'bg-slate-900' },
-                                    { label: 'Total Hotspots', value: '0', color: 'bg-zinc-400' }
-                                ].map((stat, i) => (
-                                    <div key={i} className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
-                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{stat.label}</p>
-                                        <p className="text-4xl font-black text-gray-900">{stat.value}</p>
-                                        <div className={`h-1 w-12 ${stat.color} mt-4 rounded-full`}></div>
+                                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                    <div className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">
+                                        ACTIVE EDITIONS:
                                     </div>
-                                ))}
+                                    <div className="text-4xl font-bold text-gray-900 dark:text-white">
+                                        {stats.activeEditions}
+                                    </div>
+                                </div>
+
+                                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                    <div className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-2">
+                                        <AlertTriangle size={16} className="text-yellow-500" />
+                                        LOW BATTERY:
+                                    </div>
+                                    <div className="text-4xl font-bold text-gray-900 dark:text-white">
+                                        {stats.lowBattery}
+                                    </div>
+                                </div>
+
+                                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                    <div className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">
+                                        TOTAL READERS:
+                                    </div>
+                                    <div className="text-4xl font-bold text-gray-900 dark:text-white">
+                                        {(stats.totalReaders / 1000).toFixed(1)}k
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* E-Paper First Section */}
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+                                    E-Paper First
+                                </h2>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {filteredEditions.map((edition) => (
+                                        <div
+                                            key={edition.id}
+                                            className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow"
+                                        >
+                                            {/* Header */}
+                                            <div className="mb-4">
+                                                <div className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">
+                                                    EDITION ID: {edition.id}
+                                                </div>
+                                            </div>
+
+                                            {/* Content */}
+                                            <div className="flex gap-4 mb-4">
+                                                {/* Thumbnail */}
+                                                <div className="w-24 h-32 bg-gray-200 dark:bg-gray-700 rounded border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden">
+                                                    <img
+                                                        src={edition.thumbnail}
+                                                        alt={edition.name}
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                </div>
+
+                                                {/* Info */}
+                                                <div className="flex-1 space-y-3">
+                                                    <div>
+                                                        <div className="font-bold text-gray-900 dark:text-white">
+                                                            {edition.name}
+                                                        </div>
+                                                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                            STATUS
+                                                        </div>
+                                                        <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                            {edition.status}
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                            {edition.online ? 'ONLINE' : 'OFFLINE'} ({edition.battery}%)
+                                                        </div>
+                                                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                            {edition.syncTime} min ago
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Footer */}
+                                            <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+                                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                    LAST SYNC: {edition.lastSync}
+                                                </div>
+                                                <button className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded transition-colors">
+                                                    EDIT
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     )}
 
-                    {activeTab === 'upload' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-                            <ImageUploader onUploadComplete={(url) => console.log('Uploaded:', url)} />
+                    {activeTab === 'editions' && (
+                        <div className="max-w-2xl mx-auto">
+                            <div className="bg-white dark:bg-gray-800 rounded-lg p-8 border border-gray-200 dark:border-gray-700">
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+                                    Upload New Edition
+                                </h2>
+                                <ImageUploader onUploadComplete={(url) => console.log('Uploaded:', url)} />
+                            </div>
                         </div>
                     )}
 
-                    {activeTab === 'manage' && (
-                        <div className="py-20 text-center text-gray-400 italic font-medium uppercase tracking-widest text-[10px] animate-in fade-in duration-700">
-                            Management module under development...
+                    {activeTab !== 'dashboard' && activeTab !== 'editions' && (
+                        <div className="text-center py-20">
+                            <div className="text-gray-400 text-lg mb-4">
+                                {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Section
+                            </div>
+                            <div className="text-gray-500 text-sm">
+                                This section is under development
+                            </div>
                         </div>
                     )}
                 </div>

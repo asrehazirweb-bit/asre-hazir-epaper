@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // E-paper Pages Collection
+    // TEMPORARY: Allow public read access for testing
+    match /epaper_pages/{pageId} {
+      // Allow anyone to read all pages (for testing)
+      allow read: if true;
+      
+      // Allow anyone to write (for testing without auth)
+      allow create, update, delete: if true;
+    }
+    
+    // Default rule - deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

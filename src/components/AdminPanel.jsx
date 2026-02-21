@@ -25,7 +25,10 @@ const AdminPanel = ({ onBack }) => {
         }
     };
 
-    if (loading) {
+    // Bypass logic for testing
+    const [isTestBypass, setIsTestBypass] = useState(true);
+
+    if (loading && !isTestBypass) {
         return (
             <div className="flex h-screen items-center justify-center bg-[#f8f9fa]">
                 <div className="w-8 h-8 border-4 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
@@ -33,12 +36,14 @@ const AdminPanel = ({ onBack }) => {
         );
     }
 
-    // If we are on /login and already an admin, go to /admin
-    if (user && isAdmin && location.pathname === '/login') {
-        return <Navigate to="/admin" replace />;
-    }
+    // Dummy user for bypass mode
+    const dummyUser = {
+        displayName: 'Test Admin',
+        email: 'test@example.com',
+        photoURL: 'https://ui-avatars.com/api/?name=Test+Admin&background=0D8ABC&color=fff'
+    };
 
-    if (!user || !isAdmin) {
+    if (!isTestBypass && (!user || !isAdmin)) {
         return (
             <div className="flex h-screen items-center justify-center bg-[#f8f9fa] p-4 font-sans">
                 <div className="w-full max-w-md space-y-8 rounded-[2rem] bg-white p-12 shadow-2xl border border-gray-100 relative overflow-hidden">
@@ -87,7 +92,7 @@ const AdminPanel = ({ onBack }) => {
         );
     }
 
-    return <AdminLayout onBack={onBack} user={user} />;
+    return <AdminLayout onBack={onBack} user={user || dummyUser} />;
 };
 
 export default AdminPanel;
