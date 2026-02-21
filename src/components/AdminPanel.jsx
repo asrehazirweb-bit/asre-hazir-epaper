@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { auth, db } from '../firebase/config';
 import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Chrome, ShieldCheck, Zap, ChevronLeft } from 'lucide-react';
 import AdminLayout from './AdminLayout';
 import { useAuth } from '../context/AuthContext';
@@ -17,7 +18,21 @@ const AdminPanel = ({ onBack }) => {
         setError('');
         try {
             const provider = new GoogleAuthProvider();
-            await signInWithPopup(auth, provider);
+            const result = await signInWithPopup(auth, provider);
+            const loggedInUser = result.user;
+
+            // Store/Update user profile in Firestore
+            await setDoc(doc(db, 'users', loggedInUser.uid), {
+                uid: loggedInUser.uid,
+                email: loggedInUser.email,
+                displayName: loggedInUser.displayName,
+                photoURL: loggedInUser.photoURL,
+                lastLogin: serverTimestamp(),
+                // Role is only set if it doesn't exist, to prevent overwriting
+            }, { merge: true });
+
+            console.log("✅ User profile synced with Firestore");
+
         } catch (err) {
             console.error(err);
             setError('Login failed: ' + err.message);
