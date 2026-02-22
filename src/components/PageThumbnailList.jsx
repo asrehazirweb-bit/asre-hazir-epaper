@@ -1,81 +1,47 @@
 import React from 'react';
 import { FileText } from 'lucide-react';
 
-const PageThumbnailList = ({ pages, activePageIndex, onPageSelect }) => {
+const PageThumbnailList = ({ pages, activePageIndex, onPageSelect, horizontal = false }) => {
     return (
-        <div className="h-full flex flex-col bg-white dark:bg-gray-800">
-            {/* Header */}
-            <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex items-center gap-2">
-                    <FileText size={18} className="text-gray-600 dark:text-gray-400" />
-                    <h3 className="font-bold text-gray-900 dark:text-white text-sm">
-                        Pages ({pages.length})
-                    </h3>
+        <div className={`h-full flex ${horizontal ? 'flex-row' : 'flex-col'} bg-[#111827]`}>
+            {!horizontal && (
+                <div className="px-6 py-4 border-b border-white/5 bg-black/20">
+                    <div className="flex items-center gap-3">
+                        <FileText size={16} className="text-blue-500" />
+                        <h3 className="font-black text-white text-[10px] uppercase tracking-[0.2em]">
+                            Sheets ({pages.length})
+                        </h3>
+                    </div>
                 </div>
-            </div>
+            )}
 
-            {/* Thumbnail List */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            <div className={`flex-1 overflow-auto custom-scrollbar ${horizontal ? 'flex flex-row p-2 gap-3 h-28' : 'p-4 space-y-3'}`}>
                 {pages.map((page, index) => (
                     <button
                         key={page.id || index}
                         onClick={() => onPageSelect(index)}
-                        className={`w-full text-left rounded-lg border-2 transition-all duration-200 overflow-hidden group ${index === activePageIndex
-                                ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-100 dark:ring-blue-900/40'
-                                : 'border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-600 bg-white dark:bg-gray-900'
+                        className={`${horizontal ? 'h-full aspect-[1/1.4] shrink-0' : 'w-full'} relative rounded-xl overflow-hidden border-2 transition-all duration-300 ${index === activePageIndex
+                            ? 'border-blue-600 shadow-lg shadow-blue-500/20'
+                            : 'border-white/5 hover:border-white/10 hover:bg-white/5'
                             }`}
                     >
-                        {/* Thumbnail Image */}
-                        <div className="relative aspect-[3/4] bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                        <div className="w-full h-full bg-[#1F2937]">
                             <img
                                 src={page.imageUrl}
-                                alt={`Page ${page.pageNumber}`}
+                                alt={`Sheet ${page.pageNumber}`}
                                 loading="lazy"
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                className={`w-full h-full object-cover transition-all duration-500 ${index === activePageIndex ? 'opacity-100' : 'opacity-40 grayscale group-hover:opacity-100 group-hover:grayscale-0'}`}
                             />
 
-                            {/* Page Number Badge */}
-                            <div className="absolute top-2 left-2">
-                                <div className={`px-2 py-1 rounded text-xs font-bold shadow-lg ${index === activePageIndex
-                                        ? 'bg-blue-600 text-white'
-                                        : 'bg-white/90 dark:bg-gray-900/90 text-gray-900 dark:text-white'
-                                    }`}>
-                                    P{page.pageNumber}
-                                </div>
-                            </div>
-
-                            {/* Active Indicator */}
-                            {index === activePageIndex && (
-                                <div className="absolute inset-0 border-4 border-blue-600 pointer-events-none"></div>
-                            )}
-                        </div>
-
-                        {/* Page Info */}
-                        <div className="p-2 border-t border-gray-200 dark:border-gray-700">
-                            <p className={`text-xs font-semibold truncate ${index === activePageIndex
-                                    ? 'text-blue-700 dark:text-blue-400'
-                                    : 'text-gray-700 dark:text-gray-300'
+                            <div className={`absolute top-2 left-2 px-1.5 py-0.5 rounded text-[8px] font-black shadow-2xl ${index === activePageIndex
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-black/80 text-gray-400 border border-white/5'
                                 }`}>
-                                {page.title || `Page ${page.pageNumber}`}
-                            </p>
-                            {page.editionDate && (
-                                <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
-                                    {new Date(page.editionDate).toLocaleDateString('en-US', {
-                                        month: 'short',
-                                        day: 'numeric'
-                                    })}
-                                </p>
-                            )}
+                                {page.pageNumber}
+                            </div>
                         </div>
                     </button>
                 ))}
-            </div>
-
-            {/* Footer Info */}
-            <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-                <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                    Click a page to view
-                </p>
             </div>
         </div>
     );

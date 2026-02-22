@@ -76,12 +76,18 @@ const PageViewer = memo(({ page, onArticleClick, onCoordinateClick }) => {
                     limitToBounds={false}
                     disabled={false}
                     doubleClick={{ disabled: true }}
-                    panning={{ activationKeys: ["Space"], disabled: false }}
-                    wheel={{ disabled: true }} // EXPLICIT: Mouse wheel scrolls the container, NOT the image
+                    panning={{
+                        activationKeys: ["Space"],
+                        disabled: false,
+                        velocityDisabled: true
+                    }}
+                    pinch={{ disabled: false }}
+                    wheel={{ disabled: true }} // EXPLICIT: Wheel scrolls the page, NOT the image
+                    alignmentAnimation={{ disabled: true }}
                 >
                     {({ zoomIn, zoomOut, resetTransform }) => (
                         <>
-                            {/* Persistent Controls */}
+                            {/* Persistent Controls (Hidden on narrow mobile if needed, but useful generally) */}
                             <div className="absolute bottom-10 right-10 z-30 flex flex-col gap-3">
                                 <button onClick={() => zoomIn()} className="w-12 h-12 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/10 rounded-2xl flex items-center justify-center text-white transition-all shadow-2xl group">
                                     <ZoomIn size={20} className="group-hover:scale-110 transition-transform" />
@@ -96,12 +102,12 @@ const PageViewer = memo(({ page, onArticleClick, onCoordinateClick }) => {
 
                             <TransformComponent
                                 wrapperClassName="!w-full !min-h-full"
-                                contentClassName="flex items-start justify-center py-10"
+                                contentClassName="flex items-start justify-center py-4 lg:py-10"
                             >
                                 <div
                                     ref={containerRef}
                                     onClick={handleContainerClick}
-                                    className="relative shadow-[0_0_100px_rgba(0,0,0,0.8)] bg-white cursor-crosshair group"
+                                    className="relative shadow-[0_0_100px_rgba(0,0,0,0.8)] bg-white cursor-crosshair group touch-action-none"
                                 >
                                     <img
                                         src={page.imageUrl}
@@ -111,7 +117,7 @@ const PageViewer = memo(({ page, onArticleClick, onCoordinateClick }) => {
                                         className={`max-w-none transition-opacity duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                                         style={{
                                             width: 'auto',
-                                            height: '160vh',
+                                            height: window.innerWidth < 768 ? '120vh' : '160vh',
                                             pointerEvents: 'none'
                                         }}
                                     />
@@ -133,7 +139,7 @@ const PageViewer = memo(({ page, onArticleClick, onCoordinateClick }) => {
                                                 onArticleClick(art);
                                             }}
                                         >
-                                            <div className="absolute inset-x-0 -bottom-8 opacity-0 group-hover/hotspot:opacity-100 flex justify-center transition-opacity">
+                                            <div className="absolute inset-x-0 -bottom-8 opacity-0 lg:group-hover/hotspot:opacity-100 flex justify-center transition-opacity">
                                                 <div className="px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded uppercase tracking-widest shadow-2xl border border-blue-400/50">
                                                     Read Article
                                                 </div>

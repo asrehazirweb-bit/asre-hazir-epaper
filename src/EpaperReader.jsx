@@ -263,22 +263,24 @@ const EpaperReader = () => {
             </header>
 
             {/* Main Workspace */}
-            <div className="flex-1 flex overflow-hidden">
-                {/* Thumbnails Sidebar */}
-                <aside className={`bg-[#111827] border-r border-white/5 transition-all duration-300 flex flex-col shrink-0 ${leftPanelCollapsed ? 'w-0' : 'w-72'}`}>
-                    <div className="flex-1 overflow-y-auto custom-scrollbar">
-                        <PageThumbnailList
-                            pages={pages}
-                            activePageIndex={currentPageIndex}
-                            onPageSelect={(idx) => {
-                                handlePageNavigation(idx);
-                                if (isMobile) setLeftPanelCollapsed(true);
-                            }}
-                        />
-                    </div>
+            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+                {/* Thumbnails Navigation */}
+                <aside className={`bg-[#111827] border-white/5 transition-all duration-300 flex flex-col shrink-0 
+                    ${isMobile
+                        ? 'w-full h-auto border-b'
+                        : (leftPanelCollapsed ? 'w-0 overflow-hidden' : 'w-72 border-r')}`}
+                >
+                    <PageThumbnailList
+                        pages={pages}
+                        activePageIndex={currentPageIndex}
+                        onPageSelect={(idx) => {
+                            handlePageNavigation(idx);
+                        }}
+                        horizontal={isMobile}
+                    />
                 </aside>
 
-                {/* Central Canvas */}
+                {/* Central Canvas Container */}
                 <main className="flex-1 relative bg-black overflow-hidden flex flex-col">
                     <div className="flex-1 overflow-hidden relative">
                         {/* THE STABLE CANVAS - NEVER UNMOUNTS */}
@@ -333,72 +335,93 @@ const EpaperReader = () => {
                         </AnimatePresence>
                     </div>
 
-                    {/* Navigation Rail */}
-                    <div className="h-16 bg-[#111827]/80 backdrop-blur-xl border-t border-white/5 flex items-center justify-between px-8 z-20 shrink-0">
-                        <button
-                            onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
-                            className="p-2.5 hover:bg-white/5 rounded-xl text-gray-500 transition-colors"
-                        >
-                            <Sidebar size={20} />
-                        </button>
+                    {/* Navigation Rail (Desktop Only or refined for mobile) */}
+                    {!isMobile && (
+                        <div className="h-16 bg-[#111827]/80 backdrop-blur-xl border-t border-white/5 flex items-center justify-between px-8 z-20 shrink-0">
+                            <button
+                                onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
+                                className="p-2.5 hover:bg-white/5 rounded-xl text-gray-500 transition-colors"
+                            >
+                                <Sidebar size={20} />
+                            </button>
 
-                        <div className="flex items-center gap-4">
-                            <button
-                                onClick={() => handlePageNavigation(Math.max(0, currentPageIndex - 1))}
-                                disabled={currentPageIndex === 0 || feedStatus === 'loading'}
-                                className="flex items-center gap-3 px-6 py-2 bg-white/5 hover:bg-white/10 disabled:opacity-20 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all"
-                            >
-                                <ChevronLeft size={16} /> Previous
-                            </button>
-                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{currentPageIndex + 1} // {pages.length}</span>
-                            <button
-                                onClick={() => handlePageNavigation(Math.min(pages.length - 1, currentPageIndex + 1))}
-                                disabled={currentPageIndex === pages.length - 1 || feedStatus === 'loading'}
-                                className="flex items-center gap-3 px-6 py-2 bg-white/5 hover:bg-white/10 disabled:opacity-20 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all"
-                            >
-                                Next <ChevronRight size={16} />
-                            </button>
+                            <div className="flex items-center gap-4">
+                                <button
+                                    onClick={() => handlePageNavigation(Math.max(0, currentPageIndex - 1))}
+                                    disabled={currentPageIndex === 0 || feedStatus === 'loading'}
+                                    className="flex items-center gap-3 px-6 py-2 bg-white/5 hover:bg-white/10 disabled:opacity-20 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all"
+                                >
+                                    <ChevronLeft size={16} /> Previous
+                                </button>
+                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{currentPageIndex + 1} // {pages.length}</span>
+                                <button
+                                    onClick={() => handlePageNavigation(Math.min(pages.length - 1, currentPageIndex + 1))}
+                                    disabled={currentPageIndex === pages.length - 1 || feedStatus === 'loading'}
+                                    className="flex items-center gap-3 px-6 py-2 bg-white/5 hover:bg-white/10 disabled:opacity-20 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all"
+                                >
+                                    Next <ChevronRight size={16} />
+                                </button>
+                            </div>
+                            <div className="w-10" />
                         </div>
-                        <div className="w-10" />
-                    </div>
+                    )}
                 </main>
 
-                {/* Article Panel */}
-                <aside className={`bg-[#0B0F19] border-l border-white/5 transition-all duration-500 overflow-hidden relative z-30 shrink-0 ${!selectedArticle ? 'w-0' : 'w-[550px]'}`}>
-                    {selectedArticle && (
-                        <ArticlePreview
-                            article={selectedArticle}
-                            onClose={() => setSelectedArticle(null)}
-                            onNext={() => {
-                                const idx = articles.findIndex(a => a.id === selectedArticle.id);
-                                if (idx < articles.length - 1) setSelectedArticle({ ...articles[idx + 1], imageUrl: pages[currentPageIndex]?.imageUrl });
-                            }}
-                            onPrev={() => {
-                                const idx = articles.findIndex(a => a.id === selectedArticle.id);
-                                if (idx > 0) setSelectedArticle({ ...articles[idx - 1], imageUrl: pages[currentPageIndex]?.imageUrl });
-                            }}
-                        />
-                    )}
-                </aside>
+                {/* Desktop Article Panel */}
+                {!isMobile && (
+                    <aside className={`bg-[#0B0F19] border-l border-white/5 transition-all duration-500 overflow-hidden relative z-30 shrink-0 ${!selectedArticle ? 'w-0' : 'w-[550px]'}`}>
+                        {selectedArticle && (
+                            <ArticlePreview
+                                article={selectedArticle}
+                                onClose={() => setSelectedArticle(null)}
+                                onNext={() => {
+                                    const idx = articles.findIndex(a => a.id === selectedArticle.id);
+                                    if (idx < articles.length - 1) setSelectedArticle({ ...articles[idx + 1], imageUrl: pages[currentPageIndex]?.imageUrl });
+                                }}
+                                onPrev={() => {
+                                    const idx = articles.findIndex(a => a.id === selectedArticle.id);
+                                    if (idx > 0) setSelectedArticle({ ...articles[idx - 1], imageUrl: pages[currentPageIndex]?.imageUrl });
+                                }}
+                            />
+                        )}
+                    </aside>
+                )}
             </div>
 
-            {/* Mobile Sheet */}
+            {/* Mobile Bottom Sheet (Article Reader) */}
             <AnimatePresence>
                 {isMobile && selectedArticle && (
                     <motion.div
                         initial={{ y: '100%' }}
                         animate={{ y: 0 }}
                         exit={{ y: '100%' }}
-                        className="fixed inset-0 z-[100] flex flex-col bg-[#0B0F19]"
+                        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                        className="fixed inset-x-0 bottom-0 z-[100] h-[75vh] flex flex-col bg-[#0B0F19] rounded-t-[2.5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.5)] border-t border-white/10 overflow-hidden"
                     >
-                        <div className="p-4 flex justify-between items-center border-b border-white/5">
-                            <span className="text-[10px] font-black uppercase tracking-widest">Article Reader</span>
-                            <button onClick={() => setSelectedArticle(null)} className="p-2 bg-white/5 rounded-xl"><ChevronLeft size={20} /></button>
+                        {/* Drag Handle */}
+                        <div className="h-1.5 w-12 bg-white/20 rounded-full mx-auto my-4 shrink-0" />
+
+                        <div className="p-6 flex justify-between items-center border-b border-white/5 shrink-0 bg-[#0B0F19]">
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-500">Live Reading Mode</span>
+                            <button
+                                onClick={() => setSelectedArticle(null)}
+                                className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl text-gray-400"
+                            >
+                                <ChevronRight size={20} className="rotate-90" />
+                            </button>
                         </div>
                         <div className="flex-1 overflow-hidden">
                             <ArticlePreview
                                 article={selectedArticle}
                                 onClose={() => setSelectedArticle(null)}
+                                onNext={() => {
+                                    const idx = articles.findIndex(a => a.id === selectedArticle.id);
+                                    if (idx < articles.length - 1) setSelectedArticle({ ...articles[idx + 1], imageUrl: pages[currentPageIndex]?.imageUrl });
+                                }}
+                                onPrev={() => {
+                                    const idx = articles.findIndex(a => a.id === selectedArticle.id);
+                                    if (idx > 0) setSelectedArticle({ ...articles[idx - 1], imageUrl: pages[currentPageIndex]?.imageUrl });
+                                }}
                             />
                         </div>
                     </motion.div>
