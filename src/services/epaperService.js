@@ -129,11 +129,12 @@ export const getPublishedEditions = async () => {
 export const getPagesByEdition = async (editionId) => {
     const q = query(
         collection(db, PAGES_COLL),
-        where("editionId", "==", editionId),
-        orderBy("pageNumber", "asc")
+        where("editionId", "==", editionId)
     );
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => (parseInt(a.pageNumber) || 0) - (parseInt(b.pageNumber) || 0));
 };
 
 /**

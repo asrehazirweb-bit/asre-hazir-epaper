@@ -9,21 +9,25 @@ service cloud.firestore {
     }
     
     function isAdmin() {
-      // Logic: User must be signed in AND have role 'admin' in their user document
       return isSignedIn() && (
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
       );
     }
 
-    // 🗞️ EDITIONS & PAGES (Public for Readers, Admin for Management)
-    match /editions/{editionId} {
+    // 🗞️ EDITIONS, PAGES & ARTICLES (Public for Readers, Admin for Management)
+    match /epaper_editions/{editionId} {
       allow read: if true; 
       allow write: if isAdmin();
     }
-    
-    match /epaper_editions/{editionId} {
-      allow read: if true; 
+
+    match /epaper_pages/{pageId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /epaper_articles/{articleId} {
+      allow read: if true;
       allow write: if isAdmin();
     }
 
@@ -33,15 +37,8 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // 📂 LEGACY COLLECTIONS
-    match /epaper_pages/{pageId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-    
     // 👤 USER PROFILES
     match /users/{userId} {
-      // Allow anybody to be created (sign up), but only user or admin can read/edit
       allow create: if isSignedIn();
       allow read, update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       allow delete: if isAdmin();

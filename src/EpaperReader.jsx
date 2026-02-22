@@ -8,7 +8,7 @@ import ArticlePreview from './components/ArticlePreview';
 import {
     Loader2, Calendar, Globe, Newspaper, ChevronLeft, ChevronRight,
     Maximize2, Sidebar, PanelsTopLeft, Search, User, LogIn,
-    Zap, Activity, Clock
+    Zap, Activity, Clock, AlertTriangle
 } from 'lucide-react';
 import { getPagesByEdition, getArticlesByPage, incrementReaders } from './services/epaperService';
 
@@ -134,6 +134,35 @@ const EpaperReader = () => {
                 <div className="text-center space-y-6">
                     <Loader2 className="w-12 h-12 text-blue-500 animate-spin mx-auto" />
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em] animate-pulse">Initializing Newsroom Engine...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="h-screen flex items-center justify-center bg-[#0B0F19] p-8">
+                <div className="text-center space-y-6 max-w-md">
+                    <AlertTriangle className="w-16 h-16 text-amber-500 mx-auto" />
+                    <h2 className="text-xl font-black uppercase tracking-widest italic">Sync Error Detected</h2>
+                    <p className="text-gray-500 text-xs font-medium leading-relaxed uppercase tracking-wider">
+                        {error.includes('index')
+                            ? "A database index is required to sort your editions. Please check the browser console for the creation link."
+                            : error}
+                    </p>
+                    <button onClick={() => window.location.reload()} className="px-8 py-3 bg-white text-black rounded-xl text-[10px] font-black uppercase tracking-widest">Retry Connection</button>
+                </div>
+            </div>
+        );
+    }
+
+    if (editions.length === 0) {
+        return (
+            <div className="h-screen flex items-center justify-center bg-[#0B0F19]">
+                <div className="text-center space-y-6">
+                    <Newspaper className="w-16 h-16 text-gray-800 mx-auto" />
+                    <h2 className="text-xl font-black uppercase tracking-widest italic text-gray-700">No Published Editions</h2>
+                    <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.2em]">Check Admin Panel for draft status</p>
                 </div>
             </div>
         );

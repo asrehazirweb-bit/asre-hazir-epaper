@@ -198,6 +198,14 @@ const EditionEditor = () => {
                         {edition?.status === 'published' ? <CheckCircle size={14} /> : <AlertTriangle size={14} />}
                         {edition?.status === 'published' ? 'Live on Portal' : 'Draft / Offline'}
                     </button>
+                    <a
+                        href="/"
+                        target="_blank"
+                        className="p-2.5 hover:bg-blue-600/10 text-gray-400 hover:text-blue-500 rounded-xl transition-all"
+                        title="View Live Reader"
+                    >
+                        <Eye size={20} />
+                    </a>
                     {saving && <RefreshCw size={16} className="animate-spin text-blue-500" />}
                 </div>
             </header>
