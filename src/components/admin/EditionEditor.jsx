@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../firebase/config';
-import { doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import {
     ChevronLeft, Save, Sparkles, Trash2, Eye, Layout,
     Type, CheckCircle2, AlertTriangle, MousePointer2,

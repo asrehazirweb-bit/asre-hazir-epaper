@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db } from './firebase/config';
-import { collection, query, orderBy, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, onSnapshot, where } from 'firebase/firestore';
 import PageThumbnailList from './components/PageThumbnailList';
 import PageViewer from './components/PageViewer';
 import ArticlePreview from './components/ArticlePreview';
