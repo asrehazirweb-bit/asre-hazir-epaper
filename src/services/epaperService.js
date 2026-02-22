@@ -160,8 +160,10 @@ export const addEpaperPage = async (pageData) => {
 
     if (!snapshot.empty) {
         editionId = snapshot.docs[0].id;
+        // Force update existing edition to published/active when a new page is uploaded
+        await updateDoc(doc(db, EDITIONS_COLL, editionId), { status: 'published', isActive: true, updatedAt: serverTimestamp() });
     } else {
-        editionId = await saveEdition({ editionDate: pageData.editionDate, status: 'draft', isActive: false });
+        editionId = await saveEdition({ editionDate: pageData.editionDate, status: 'published', isActive: true });
     }
 
     // 2. Save page
