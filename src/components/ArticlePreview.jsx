@@ -66,7 +66,6 @@ const ArticlePreview = ({ article, onClose, onNext, onPrev }) => {
                             src={croppedImageUrl}
                             alt="Article Focus"
                             className="w-full h-full object-contain"
-                            crossOrigin="anonymous"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-[#0B0F19] to-transparent opacity-60" />
                         <div className="absolute bottom-6 left-8 flex items-center gap-2">

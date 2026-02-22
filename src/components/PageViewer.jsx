@@ -98,13 +98,17 @@ const PageViewer = ({ page, onArticleClick, onCoordinateClick }) => {
                                         src={page.imageUrl}
                                         alt="Digital Sheet"
                                         onLoad={handleImageLoad}
+                                        onError={(e) => {
+                                            console.error("❌ Image Load Error:", e);
+                                            // Fallback to show something if image fails
+                                            setImageLoaded(true);
+                                        }}
                                         className={`max-w-none transition-opacity duration-1000 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                                         style={{
                                             width: 'auto',
                                             height: '140vh', // Large, detailed view
                                             pointerEvents: 'none'
                                         }}
-                                        crossOrigin="anonymous"
                                     />
 
                                     {/* HOTSPOTS LAYER */}
