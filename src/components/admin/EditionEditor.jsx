@@ -5,15 +5,19 @@ import { doc, getDoc, updateDoc, onSnapshot, serverTimestamp } from 'firebase/fi
 import {
     ChevronLeft, Save, Sparkles, Trash2, Eye, Layout,
     Type, CheckCircle2, AlertTriangle, MousePointer2,
-    Maximize, ZoomIn, ZoomOut, RefreshCw, Layers
+    Maximize, ZoomIn, ZoomOut, RefreshCw, Layers,
+    ScanLine, Image as ImageIcon, CheckCircle
 } from 'lucide-react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { performOCR } from '../../utils/ocrService';
+import { getPagesByEdition, getArticlesByPage, saveArticle, saveEdition } from '../../services/epaperService';
 
 const EditionEditor = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const [edition, setEdition] = useState(null);
+    const [pages, setPages] = useState([]);
+    const [articles, setArticles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedPageIdx, setSelectedPageIdx] = useState(0);
     const [activeHotspot, setActiveHotspot] = useState(null);
@@ -25,38 +29,43 @@ const EditionEditor = () => {
     const imageRef = useRef(null);
     const containerRef = useRef(null);
 
+    // Initial Fetch: Edition and Pages
     useEffect(() => {
-        const unsub = onSnapshot(doc(db, 'epaper_editions', id), (snapshot) => {
-            if (snapshot.exists()) {
-                setEdition({ id: snapshot.id, ...snapshot.data() });
+        const fetchEditionData = async () => {
+            try {
+                const edSnap = await getDoc(doc(db, 'epaper_editions', id));
+                if (edSnap.exists()) {
+                    setEdition({ id: edSnap.id, ...edSnap.data() });
+                    const fetchedPages = await getPagesByEdition(id);
+                    setPages(fetchedPages);
+                }
+            } catch (err) {
+                console.error("Fetch failed:", err);
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
-        });
-        return () => unsub();
+        };
+        fetchEditionData();
     }, [id]);
 
-    const currentPage = edition?.pages?.[selectedPageIdx];
+    // Fetch articles when page changes
+    useEffect(() => {
+        const fetchPageArticles = async () => {
+            if (!pages[selectedPageIdx]) return;
+            try {
+                const fetchedArticles = await getArticlesByPage(pages[selectedPageIdx].id);
+                setArticles(fetchedArticles);
+            } catch (err) {
+                console.error("Articles fetch failed:", err);
+            }
+        };
+        fetchPageArticles();
+    }, [selectedPageIdx, pages]);
 
-    const togglePublish = async () => {
-        const newStatus = edition.status === 'published' ? 'draft' : 'published';
-        const newActive = !edition.isActive;
-
-        setSaving(true);
-        try {
-            await updateDoc(doc(db, 'epaper_editions', id), {
-                status: newStatus,
-                isActive: newActive,
-                publishedAt: serverTimestamp()
-            });
-        } catch (err) {
-            console.error("Publish toggle failed:", err);
-        } finally {
-            setSaving(false);
-        }
-    };
+    const currentPage = pages[selectedPageIdx];
 
     const handleMouseDown = (e) => {
-        if (!containerRef.current || activeHotspot) return;
+        if (!containerRef.current || activeHotspot || isDrawing) return;
 
         const rect = containerRef.current.getBoundingClientRect();
         const x = ((e.clientX - rect.left) / rect.width) * 100;
@@ -65,7 +74,7 @@ const EditionEditor = () => {
         setStartPos({ x, y });
         setIsDrawing(true);
         setActiveHotspot({
-            id: 'temp-' + Date.now(),
+            id: null, // New
             rect: { x, y, w: 0, h: 0 },
             headline: '',
             content: '',
@@ -94,44 +103,29 @@ const EditionEditor = () => {
     const handleMouseUp = () => {
         if (isDrawing) {
             setIsDrawing(false);
-            if (activeHotspot.rect.w < 1 || activeHotspot.rect.h < 1) {
+            if (activeHotspot.rect.w < 0.5 || activeHotspot.rect.h < 0.5) {
                 setActiveHotspot(null);
             }
         }
     };
 
-    const saveHotspot = () => {
-        if (!activeHotspot) return;
-
-        const updatedPages = [...edition.pages];
-        const page = { ...updatedPages[selectedPageIdx] };
-        page.articles = page.articles || [];
-
-        const existingIdx = page.articles.findIndex(a => a.id === activeHotspot.id);
-        if (existingIdx >= 0) {
-            page.articles[existingIdx] = activeHotspot;
-        } else {
-            page.articles.push({ ...activeHotspot, id: 'art-' + Date.now() });
-        }
-
-        updatedPages[selectedPageIdx] = page;
-        handleUpdateEdition({ pages: updatedPages });
-        setActiveHotspot(null);
-    };
-
-    const deleteHotspot = (artId) => {
-        const updatedPages = [...edition.pages];
-        const page = { ...updatedPages[selectedPageIdx] };
-        page.articles = page.articles.filter(a => a.id !== artId);
-        updatedPages[selectedPageIdx] = page;
-        handleUpdateEdition({ pages: updatedPages });
-        setActiveHotspot(null);
-    };
-
-    const handleUpdateEdition = async (data) => {
+    const handleCommitArticle = async () => {
+        if (!activeHotspot || !currentPage) return;
         setSaving(true);
         try {
-            await updateDoc(doc(db, 'epaper_editions', id), data);
+            const articleId = await saveArticle({
+                ...activeHotspot,
+                editionId: id,
+                pageId: currentPage.id
+            });
+
+            // Update local state
+            if (activeHotspot.id) {
+                setArticles(prev => prev.map(a => a.id === articleId ? { ...activeHotspot, id: articleId } : a));
+            } else {
+                setArticles(prev => [...prev, { ...activeHotspot, id: articleId }]);
+            }
+            setActiveHotspot(null);
         } catch (err) {
             console.error("Save failed:", err);
         } finally {
@@ -140,81 +134,97 @@ const EditionEditor = () => {
     };
 
     const runOCR = async () => {
-        if (!activeHotspot || ocrLoading) return;
+        if (!activeHotspot || ocrLoading || !imageRef.current) return;
         setOcrLoading(true);
         try {
-            // In a real app, we'd crop the image first.
-            // For now, we'll run OCR on the whole page or simulate it
-            const result = await performOCR(currentPage.imageUrl);
+            // Calculate absolute rectangle for OCR
+            const naturalW = imageRef.current.naturalWidth;
+            const naturalH = imageRef.current.naturalHeight;
+            const ocrRect = {
+                left: (activeHotspot.rect.x / 100) * naturalW,
+                top: (activeHotspot.rect.y / 100) * naturalH,
+                width: (activeHotspot.rect.w / 100) * naturalW,
+                height: (activeHotspot.rect.h / 100) * naturalH
+            };
+
+            const result = await performOCR(currentPage.imageUrl, ocrRect);
             setActiveHotspot(prev => ({
                 ...prev,
                 headline: result.headline || prev.headline,
                 content: result.bodyText || prev.content
             }));
         } catch (err) {
-            console.error("OCR Error:", err);
+            console.error("OCR Inference Error:", err);
         } finally {
             setOcrLoading(false);
         }
     };
 
-    if (loading) return <div className="p-20 text-center animate-pulse italic">Initializing Editor Engine...</div>;
+    const toggleEditionStatus = async () => {
+        const newStatus = edition.status === 'published' ? 'draft' : 'published';
+        const newActive = !edition.isActive;
+        setSaving(true);
+        try {
+            await saveEdition({ ...edition, status: newStatus, isActive: newActive });
+            setEdition(prev => ({ ...prev, status: newStatus, isActive: newActive }));
+        } catch (e) { console.error(e); }
+        finally { setSaving(false); }
+    };
+
+    if (loading) return (
+        <div className="h-screen flex flex-col items-center justify-center bg-[#0B0F19] space-y-4">
+            <ScanLine className="w-12 h-12 text-blue-500 animate-pulse" />
+            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-gray-500">Initializing Mapping Engine...</p>
+        </div>
+    );
 
     return (
-        <div className="h-full flex flex-col bg-[#0B0F19] text-white">
-            {/* Control Bar */}
-            <div className="h-16 glass-panel border-b border-white/5 px-8 flex items-center justify-between shrink-0">
+        <div className="h-screen flex flex-col bg-[#0B0F19] text-white overflow-hidden">
+            {/* Header */}
+            <header className="h-20 glass-panel border-b border-white/5 px-8 flex items-center justify-between shrink-0 z-40">
                 <div className="flex items-center gap-6">
-                    <button onClick={() => navigate('/admin/editions')} className="p-2 hover:bg-white/5 rounded-lg transition-colors">
+                    <button onClick={() => navigate('/admin/editions')} className="p-2.5 hover:bg-white/5 rounded-xl transition-all">
                         <ChevronLeft size={20} />
                     </button>
                     <div>
-                        <h2 className="text-sm font-black uppercase tracking-widest italic">{edition.name} <span className="text-blue-500 mx-2">//</span> Page {selectedPageIdx + 1}</h2>
+                        <h2 className="text-sm font-black uppercase tracking-widest italic">{edition?.name} <span className="text-blue-500 mx-2">//</span> Mapping Sheet {selectedPageIdx + 1}</h2>
                     </div>
                 </div>
-                <div className="flex items-center gap-4">
-                    {/* PUBLISH TOGGLE (MANDATORY FIX 4) */}
+                <div className="flex items-center gap-6">
                     <button
-                        onClick={togglePublish}
-                        className={`flex items-center gap-2 px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${edition.status === 'published' ? 'bg-green-600 text-white' : 'bg-amber-600 text-white'}`}
+                        onClick={toggleEditionStatus}
+                        className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-3 transition-all ${edition?.status === 'published' ? 'bg-green-600 text-white' : 'bg-amber-600/20 text-amber-500 border border-amber-500/30'}`}
                     >
-                        {edition.status === 'published' ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
-                        {edition.status === 'published' ? 'Published' : 'Draft Mode'}
+                        {edition?.status === 'published' ? <CheckCircle size={14} /> : <AlertTriangle size={14} />}
+                        {edition?.status === 'published' ? 'Live on Portal' : 'Draft / Offline'}
                     </button>
-
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 rounded-lg text-blue-500">
-                        <Sparkles size={14} />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Active Mapping Session</span>
-                    </div>
-                    {saving && <div className="text-[10px] font-bold text-gray-500 uppercase animate-pulse">Syncing...</div>}
+                    {saving && <RefreshCw size={16} className="animate-spin text-blue-500" />}
                 </div>
-            </div>
+            </header>
 
             <div className="flex-1 flex overflow-hidden">
-                {/* Left Panel: Page List */}
-                <div className="w-64 border-r border-white/5 bg-[#111827]/50 overflow-y-auto p-4 space-y-4">
-                    <p className="text-[9px] font-black text-gray-600 uppercase tracking-widest px-2">Edition Sheets</p>
-                    {edition.pages.map((p, idx) => (
+                {/* Thumbnails */}
+                <aside className="w-64 border-r border-white/5 bg-[#111827]/50 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+                    <p className="text-[9px] font-black text-gray-600 uppercase tracking-widest px-2">Edition Hierarchy</p>
+                    {pages.map((p, idx) => (
                         <button
-                            key={idx}
+                            key={p.id}
                             onClick={() => { setSelectedPageIdx(idx); setActiveHotspot(null); }}
-                            className={`w-full group relative aspect-[1/1.4] rounded-xl overflow-hidden border-2 transition-all ${selectedPageIdx === idx ? 'border-blue-600 shadow-lg shadow-blue-500/20' : 'border-white/5 hover:border-white/20'}`}
+                            className={`w-full relative aspect-[1/1.4] rounded-xl overflow-hidden border-2 transition-all ${selectedPageIdx === idx ? 'border-blue-600 shadow-lg shadow-blue-500/20' : 'border-white/5 hover:border-white/10'}`}
                         >
-                            <img src={p.imageUrl} className="w-full h-full object-cover grayscale opacity-50 group-hover:opacity-100 transition-all" />
-                            <div className="absolute inset-0 flex items-center justify-center">
-                                <span className="bg-black/60 px-3 py-1 rounded text-[10px] font-black uppercase">{idx + 1}</span>
-                            </div>
+                            <img src={p.imageUrl} className={`w-full h-full object-cover transition-all ${selectedPageIdx === idx ? 'opacity-100' : 'opacity-40 grayscale hover:opacity-100'}`} />
+                            <div className="absolute top-3 left-3 bg-black/80 px-2 py-1 rounded-lg text-[9px] font-black tracking-widest">{idx + 1}</div>
                         </button>
                     ))}
-                </div>
+                </aside>
 
-                {/* Center Panel: Mapping Canvas */}
-                <div className="flex-1 relative overflow-hidden bg-black">
-                    <TransformWrapper centerOnInit minScale={1} limitToBounds={false}>
-                        <TransformComponent wrapperClassName="!w-full !h-full">
+                {/* Mapping Area */}
+                <main className="flex-1 relative bg-black overflow-hidden flex flex-col">
+                    <TransformWrapper centerOnInit minScale={1} limitToBounds={false} wheel={{ disabled: true }}>
+                        <TransformComponent wrapperClassName="!w-full !h-full" contentClassName="flex items-center justify-center p-10">
                             <div
                                 ref={containerRef}
-                                className="relative bg-white cursor-crosshair"
+                                className="relative bg-white cursor-crosshair shadow-[0_0_100px_rgba(0,0,0,0.5)]"
                                 onMouseDown={handleMouseDown}
                                 onMouseMove={handleMouseMove}
                                 onMouseUp={handleMouseUp}
@@ -222,16 +232,16 @@ const EditionEditor = () => {
                                 <img
                                     ref={imageRef}
                                     src={currentPage?.imageUrl}
-                                    className="max-h-[85vh] w-auto pointer-events-none select-none"
+                                    className="max-h-[80vh] w-auto pointer-events-none select-none"
                                     crossOrigin="anonymous"
                                 />
 
-                                {/* Existing Hotspots */}
-                                {currentPage?.articles?.map((art) => (
+                                {/* Articles */}
+                                {articles.map((art) => (
                                     <div
                                         key={art.id}
                                         onClick={(e) => { e.stopPropagation(); setActiveHotspot(art); }}
-                                        className={`absolute border-2 transition-all ${activeHotspot?.id === art.id ? 'border-blue-500 bg-blue-500/20 z-30' : 'border-green-500/50 bg-green-500/5 z-10 hover:border-green-500'}`}
+                                        className={`absolute border-2 transition-all selection-none ${activeHotspot?.id === art.id ? 'border-blue-500 bg-blue-500/20 z-30' : 'border-white/20 bg-black/5 z-10 hover:border-white/60'}`}
                                         style={{
                                             left: `${art.rect.x}%`,
                                             top: `${art.rect.y}%`,
@@ -241,8 +251,8 @@ const EditionEditor = () => {
                                     />
                                 ))}
 
-                                {/* Drawing Hotspot */}
-                                {isDrawing && activeHotspot && (
+                                {/* Active Selection */}
+                                {activeHotspot && !activeHotspot.id && (
                                     <div
                                         className="absolute border-2 border-dashed border-blue-500 bg-blue-500/20 pointer-events-none z-40"
                                         style={{
@@ -257,95 +267,72 @@ const EditionEditor = () => {
                         </TransformComponent>
                     </TransformWrapper>
 
-                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 px-6 py-3 glass-panel rounded-2xl flex items-center gap-4 text-gray-500">
-                        <MousePointer2 size={16} />
-                        <span className="text-[10px] font-black uppercase tracking-widest italic">Click and drag to map new article node</span>
+                    <div className="h-16 border-t border-white/5 bg-[#111827]/80 backdrop-blur-md flex items-center justify-center gap-6">
+                        <MousePointer2 size={16} className="text-blue-500" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 italic">Drag to map news region // Click existing to edit meta</span>
                     </div>
-                </div>
+                </main>
 
-                {/* Right Panel: Article Editor */}
-                <div className="w-[450px] border-l border-white/5 bg-[#111827] overflow-y-auto p-10 flex flex-col gap-10">
-                    <div className="flex items-center justify-between border-b border-white/5 pb-6">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2.5 bg-blue-600 rounded-xl"><Layers size={20} /></div>
-                            <h3 className="text-lg font-bold tracking-tight uppercase italic">Meta Logic</h3>
-                        </div>
-                        {activeHotspot && (
-                            <button onClick={saveHotspot} className="px-6 py-2.5 bg-white text-black rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all">
-                                Commit Unit
-                            </button>
-                        )}
-                    </div>
-
-                    {activeHotspot ? (
-                        <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-300">
-                            <div className="space-y-4">
-                                <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">Article Headline</label>
-                                <textarea
-                                    value={activeHotspot.headline}
-                                    onChange={(e) => setActiveHotspot({ ...activeHotspot, headline: e.target.value })}
-                                    placeholder="Enter precision headline..."
-                                    className="w-full h-24 px-5 py-4 bg-[#0B0F19] border border-white/5 rounded-2xl text-sm font-bold text-white transition-all outline-none focus:border-blue-500"
-                                />
+                {/* Side Editor */}
+                <aside className={`border-l border-white/5 bg-[#111827] transition-all duration-500 overflow-hidden ${!activeHotspot ? 'w-0' : 'w-[500px]'}`}>
+                    {activeHotspot && (
+                        <div className="h-full flex flex-col">
+                            <div className="p-8 border-b border-white/5 flex items-center justify-between bg-black/20">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-blue-600 rounded-lg"><Layers size={18} /></div>
+                                    <span className="text-xs font-black uppercase tracking-widest">Metadata Engine</span>
+                                </div>
+                                <button onClick={handleCommitArticle} className="px-6 py-2.5 bg-white text-black rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all">Commit Node</button>
                             </div>
 
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between px-1">
-                                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest">Article Body</label>
+                            <div className="flex-1 overflow-y-auto p-10 space-y-10 custom-scrollbar">
+                                <div className="space-y-4">
+                                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">Precision Headline</label>
+                                    <textarea
+                                        value={activeHotspot.headline}
+                                        onChange={(e) => setActiveHotspot({ ...activeHotspot, headline: e.target.value })}
+                                        className="w-full h-28 px-5 py-4 bg-[#0B0F19] border border-white/5 rounded-2xl text-sm font-bold focus:border-blue-500 outline-none transition-all"
+                                        placeholder="Article Headline..."
+                                    />
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between px-1">
+                                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest">Core Body (OCR Assisted)</label>
+                                        <button onClick={runOCR} disabled={ocrLoading} className="text-blue-500 text-[10px] font-bold uppercase tracking-widest hover:text-white flex items-center gap-2">
+                                            {ocrLoading ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                                            {ocrLoading ? 'Scanning...' : 'Run Intel OCR'}
+                                        </button>
+                                    </div>
+                                    <textarea
+                                        value={activeHotspot.content}
+                                        onChange={(e) => setActiveHotspot({ ...activeHotspot, content: e.target.value })}
+                                        className="w-full h-80 px-5 py-4 bg-[#0B0F19] border border-white/5 rounded-[2rem] text-sm text-gray-400 leading-relaxed font-medium focus:border-blue-500 outline-none transition-all"
+                                        placeholder="Captured text stream..."
+                                    />
+                                </div>
+
+                                <div className="flex items-center justify-between p-6 bg-white/5 rounded-3xl border border-white/5">
+                                    <div className="flex items-center gap-3">
+                                        <CheckCircle2 size={18} className={activeHotspot.verified ? 'text-green-500' : 'text-gray-600'} />
+                                        <div>
+                                            <p className="text-[10px] font-black uppercase tracking-widest">Node Verification</p>
+                                            <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Approval for production</p>
+                                        </div>
+                                    </div>
                                     <button
-                                        onClick={runOCR}
-                                        disabled={ocrLoading}
-                                        className="flex items-center gap-2 text-[10px] font-bold text-blue-500 hover:text-blue-400 uppercase tracking-widest disabled:opacity-50"
+                                        onClick={() => setActiveHotspot(prev => ({ ...prev, verified: !prev.verified }))}
+                                        className={`w-12 h-6 rounded-full relative transition-all ${activeHotspot.verified ? 'bg-green-600' : 'bg-gray-800'}`}
                                     >
-                                        <Sparkles size={12} /> {ocrLoading ? 'Scanning...' : 'Assisted OCR'}
+                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${activeHotspot.verified ? 'left-7' : 'left-1'}`} />
                                     </button>
                                 </div>
-                                <textarea
-                                    value={activeHotspot.content}
-                                    onChange={(e) => setActiveHotspot({ ...activeHotspot, content: e.target.value })}
-                                    placeholder="Source text engine input..."
-                                    className="w-full h-[300px] px-5 py-4 bg-[#0B0F19] border border-white/5 rounded-[2rem] text-sm text-gray-300 transition-all outline-none focus:border-blue-500 leading-relaxed font-medium"
-                                />
-                            </div>
 
-                            <div className="flex items-center justify-between p-6 bg-white/5 border border-white/5 rounded-[2rem]">
-                                <div className="flex items-center gap-3">
-                                    <CheckCircle2 size={18} className={activeHotspot.verified ? 'text-green-500' : 'text-gray-600'} />
-                                    <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest">Verification Status</p>
-                                        <p className="text-[9px] text-gray-500 font-bold uppercase mt-1 italic">Force-verify before publishing</p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => setActiveHotspot({ ...activeHotspot, verified: !activeHotspot.verified })}
-                                    className={`w-12 h-6 rounded-full transition-all relative ${activeHotspot.verified ? 'bg-green-600' : 'bg-gray-800'}`}
-                                >
-                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${activeHotspot.verified ? 'left-7' : 'left-1'}`} />
-                                </button>
+                                <button onClick={() => setActiveHotspot(null)} className="w-full py-4 text-gray-500 hover:text-red-500 text-[10px] font-black uppercase tracking-widest transition-all">Cancel Mapping</button>
                             </div>
-
-                            <div className="flex items-center gap-4 pt-4">
-                                <button
-                                    onClick={() => deleteHotspot(activeHotspot.id)}
-                                    className="flex-1 flex items-center justify-center gap-3 py-4 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
-                                >
-                                    <Trash2 size={16} /> Decommission Node
-                                </button>
-                                <button onClick={() => setActiveHotspot(null)} className="p-4 bg-white/5 text-gray-500 hover:text-white rounded-2xl">
-                                    <RefreshCw size={18} />
-                                </button>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="h-full flex flex-col items-center justify-center text-center p-12 opacity-30 grayscale group">
-                            <div className="w-20 h-20 border-2 border-dashed border-gray-100 rounded-[2.5rem] flex items-center justify-center mb-8 group-hover:rotate-12 transition-transform">
-                                <Layout size={40} />
-                            </div>
-                            <h4 className="text-xs font-black uppercase tracking-widest mb-4">No Active Selection</h4>
-                            <p className="text-[10px] font-bold leading-relaxed italic">Map a region on the canvas to initialize<br />article meta-data configuration.</p>
                         </div>
                     )}
-                </div>
+                </aside>
             </div>
         </div>
     );

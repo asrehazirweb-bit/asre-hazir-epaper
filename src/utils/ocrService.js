@@ -1,76 +1,116 @@
 import { createWorker } from 'tesseract.js';
 
 /**
- * Advanced OCR Service with Layout Awareness and Text Post-Processing
+ * Enhanced OCR Service with Contrast Pre-processing and Region-Specific Extraction
+ * Optimized for Hans India style column detection and clean text recovery.
  */
-export const performOCR = async (imageDataUrl) => {
-    console.log('🤖 Starting Industry-Grade OCR Extraction...');
+export const performOCR = async (imageSource, rect = null) => {
+    console.log('🤖 Initializing Precision Newsroom OCR...');
 
-    const worker = await createWorker('eng');
+    // Create worker with advanced configuration
+    const worker = await createWorker('eng', 1, {
+        logger: m => console.log(`[OCR] ${m.status}: ${Math.round(m.progress * 100)}%`),
+    });
 
     try {
-        const { data } = await worker.recognize(imageDataUrl);
-        console.log('✅ OCR Complete. Confidence:', data.confidence.toFixed(2));
+        let processBuffer = imageSource;
 
-        // 1️⃣ LAYOUT ANALYSIS (Block-based for column integrity)
+        // If a specific region is requested, we use Tesseract's native rectangle support
+        // Note: Tesseract's rectangle expects ABSOLUTE pixel values, 
+        // while our rect is in percentages.
+        // For best results, we will use the 'rectangle' option in 'recognize'
+        // But first, we need the image dimensions.
+
+        const options = {};
+        if (rect) {
+            // We'll calculate absolute pixels in the component before calling this,
+            // or pass dimensions here. For now, let's assume rect contains absolute pixels
+            // if provided, otherwise we'll try to guess if they are percentages.
+            if (rect.x < 100 && rect.w < 100) {
+                console.warn("⚠️ OCR received percentage coordinates. Absolute pixels preferred for Tesseract.");
+            }
+            options.rectangle = rect;
+        }
+
+        // Perform recognition with layout analysis
+        const { data } = await worker.recognize(processBuffer, options);
+
+        const confidence = data.confidence;
+        console.log(`✅ Text Recovered. Confidence Pool: ${confidence.toFixed(2)}%`);
+
+        if (confidence < 40) {
+            return {
+                headline: "Low Quality Capture",
+                bodyText: "Text not detected clearly. Image resolution or contrast might be insufficient.",
+                confidence,
+                error: true
+            };
+        }
+
+        // 1️⃣ STRUCTURAL ANALYSIS
         const blocks = data.blocks || [];
-
-        let headlineCandidate = "";
-        let bodyBlocks = [];
+        let headline = "";
+        let body = [];
         let maxFontSize = 0;
 
-        // Iterate through blocks to find the headline and structure body text
-        blocks.forEach((block, index) => {
-            const blockText = block.text.trim();
-            if (!blockText) return;
+        blocks.forEach((block, idx) => {
+            const text = block.text.trim();
+            if (!text || text.length < 3) return;
 
-            // Estimate "Font Size" based on line count vs bounding box height
-            const avgLineHeight = block.bbox.y1 - block.bbox.y0;
-            const lineCount = block.lines.length;
-            const estimatedFontSize = avgLineHeight / (lineCount || 1);
+            // Heuristic for headline: Largest vertical height in top 1/3
+            const verticalScale = (block.bbox.y1 - block.bbox.y0) / (block.lines.length || 1);
 
-            // Headline Detection Logic:
-            // - Usually in the first few blocks
-            // - Typically has the largest vertical height per line
-            if (index < 2 && estimatedFontSize > maxFontSize && blockText.length < 150) {
-                maxFontSize = estimatedFontSize;
-                headlineCandidate = blockText;
+            if (idx < 3 && verticalScale > maxFontSize && text.length < 200) {
+                maxFontSize = verticalScale;
+                headline = text;
             } else {
-                bodyBlocks.push(blockText);
+                body.push(text);
             }
         });
 
-        // 2️⃣ TEXT CLEANUP PIPELINE
-        const cleanupText = (text) => {
-            return text
-                // Merge hyphenated words at line ends (e.g., "post-\nponed" -> "postponed")
-                .replace(/(\w+)-\s*\n\s*(\w+)/g, '$1$2')
-                // Remove unintended single line breaks within sentences (merge paragraphs)
-                .replace(/(?<!\n)\n(?!\n)/g, ' ')
-                // Remove repeated spaces
-                .replace(/\s{2,}/g, ' ')
-                // Remove common newspaper noise
-                .replace(/(TURN TO PAGE|CONTINUED ON|Page \d+|Photo by \w+)/gi, '')
+        // 2️⃣ CLEANUP PIPELINE (Hans India Standard)
+        const postProcess = (str) => {
+            return str
+                .replace(/(\w+)-\s*\n\s*(\w+)/g, '$1$2') // Handle line-end hyphens
+                .replace(/\n(?!\n)/g, ' ')               // Remove single line breaks
+                .replace(/\s{2,}/g, ' ')               // Remove multiple spaces
+                .replace(/[^\x20-\x7E\n]/g, '')        // Remove non-printable characters
+                .replace(/(TURN TO PAGE|CONTINUED|Page \d+)/gi, '')
                 .trim();
         };
 
-        const cleanedHeadline = cleanupText(headlineCandidate) || "Headline not detected";
-        const cleanedBody = bodyBlocks.map(block => cleanupText(block)).filter(b => b.length > 5).join('\n\n');
+        const finalHeadline = postProcess(headline || (body[0] ? body[0].substring(0, 100) : "Untitled Fragment"));
+        const finalBody = body.map(b => postProcess(b)).filter(b => b.length > 10).join('\n\n');
 
         await worker.terminate();
 
         return {
-            headline: cleanedHeadline,
-            bodyText: cleanedBody,
-            confidence: data.confidence,
-            blocks: blocks.length,
-            isPartial: data.confidence < 80 && data.confidence >= 50,
-            isLowQuality: data.confidence < 50
+            headline: finalHeadline,
+            bodyText: finalBody,
+            confidence,
+            isReliable: confidence > 75
         };
 
     } catch (error) {
-        console.error('❌ OCR Extraction Error:', error);
-        await worker.terminate();
+        console.error('❌ OCR Critical Failure:', error);
+        if (worker) await worker.terminate();
         throw error;
     }
+};
+
+/**
+ * Pre-process image for better OCR results (Contrast/Gray)
+ * Returns a DataURL or Canvas
+ */
+export const enhanceImageForOCR = async (imageElement) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = imageElement.naturalWidth;
+    canvas.height = imageElement.naturalHeight;
+
+    // Apply filters
+    ctx.filter = 'grayscale(1) contrast(1.5) brightness(1.1)';
+    ctx.drawImage(imageElement, 0, 0);
+
+    return canvas.toDataURL('image/jpeg', 0.9);
 };

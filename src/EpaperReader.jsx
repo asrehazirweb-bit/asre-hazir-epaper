@@ -5,368 +5,291 @@ import { collection, query, orderBy, getDocs, onSnapshot, where } from 'firebase
 import PageThumbnailList from './components/PageThumbnailList';
 import PageViewer from './components/PageViewer';
 import ArticlePreview from './components/ArticlePreview';
-import { Loader2, Calendar, Globe, Newspaper, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+    Loader2, Calendar, Globe, Newspaper, ChevronLeft, ChevronRight,
+    Maximize2, Sidebar, PanelsTopLeft, Search, User, LogIn,
+    Zap, Activity, Clock
+} from 'lucide-react';
+import { getPagesByEdition, getArticlesByPage, incrementReaders } from './services/epaperService';
 
 const EpaperReader = () => {
+    const [editions, setEditions] = useState([]);
     const [pages, setPages] = useState([]);
+    const [articles, setArticles] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [pageLoading, setPageLoading] = useState(false);
     const [error, setError] = useState(null);
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
     const [selectedArticle, setSelectedArticle] = useState(null);
-    const [editionDates, setEditionDates] = useState([]);
     const [selectedDate, setSelectedDate] = useState(null);
     const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
-    const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
 
-    // Monitor screen size for mobile responsiveness
+    // Responsive Monitor
     useEffect(() => {
         const handleResize = () => {
             const mobile = window.innerWidth < 1024;
             setIsMobile(mobile);
-            if (mobile) {
-                setLeftPanelCollapsed(true);
-                setRightPanelCollapsed(true);
-            } else {
-                setLeftPanelCollapsed(false);
-                setRightPanelCollapsed(false);
-            }
+            if (mobile) setLeftPanelCollapsed(true);
         };
-
         window.addEventListener('resize', handleResize);
-        handleResize(); // Initial check
+        handleResize();
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // REAL-TIME FETCH: Edition from Firestore (MANDATORY FIX 1)
+    // REAL-TIME FETCH: Editions
     useEffect(() => {
-        setLoading(true);
-        setError(null);
-
-        // Reader portal ONLY fetch: status: "published" and isActive: true
         const q = query(
             collection(db, 'epaper_editions'),
             where("status", "==", "published"),
             where("isActive", "==", true),
-            orderBy('createdAt', 'desc')
+            orderBy('editionDate', 'desc')
         );
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            try {
-                let foundEdition = null;
-                const dates = new Set();
-
-                const docs = snapshot.docs.map(doc => {
-                    const data = doc.data();
-                    if (data.editionDate) dates.add(data.editionDate);
-                    return { id: doc.id, ...data };
-                });
-
-                // Update available dates
-                const sortedDates = Array.from(dates).sort().reverse();
-                setEditionDates(sortedDates);
-
-                // Set default selected date if none
-                if (sortedDates.length > 0 && !selectedDate) {
-                    setSelectedDate(sortedDates[0]);
-                }
-
-                // Find the edition for the selected date
-                const targetDate = selectedDate || sortedDates[0];
-                foundEdition = docs.find(d => d.editionDate === targetDate);
-
-                if (foundEdition && foundEdition.pages) {
-                    // VERIFICATION CHECK (MANDATORY FIX 5)
-                    const validPages = foundEdition.pages.filter(p => p.imageUrl);
-                    setPages(validPages);
-                    // Reset page index if we changed editions
-                    if (!pages.length || foundEdition.id !== pages[0]?.editionId) {
-                        setCurrentPageIndex(0);
-                    }
-                } else {
-                    setPages([]);
-                }
-                setLoading(false);
-            } catch (err) {
-                console.error('❌ Error processing editions:', err);
-                setError(err.message);
-                setLoading(false);
+        const unsub = onSnapshot(q, (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setEditions(data);
+            if (data.length > 0 && !selectedDate) {
+                setSelectedDate(data[0].editionDate);
             }
+            setLoading(false);
         }, (err) => {
-            console.error('❌ Firestore listener error:', err);
-            setError(err.message);
+            console.error("Firestore Error:", err);
+            setError("Connectivity lost. Reconnecting...");
             setLoading(false);
         });
 
-        return () => unsubscribe();
-    }, [selectedDate]);
+        return () => unsub();
+    }, []);
+
+    // FETCH: Pages for selected date
+    useEffect(() => {
+        const fetchContent = async () => {
+            const edition = editions.find(e => e.editionDate === selectedDate);
+            if (!edition) return;
+
+            setPageLoading(true);
+            try {
+                const fetchedPages = await getPagesByEdition(edition.id);
+                setPages(fetchedPages);
+                setCurrentPageIndex(0);
+                setSelectedArticle(null);
+                incrementReaders(edition.id);
+            } catch (err) {
+                console.error("Page fetch failed:", err);
+            } finally {
+                setPageLoading(false);
+            }
+        };
+
+        if (selectedDate && editions.length > 0) {
+            fetchContent();
+        }
+    }, [selectedDate, editions]);
+
+    // FETCH: Articles for current page
+    useEffect(() => {
+        const fetchArticles = async () => {
+            if (!pages[currentPageIndex]) return;
+            try {
+                const fetchedArticles = await getArticlesByPage(pages[currentPageIndex].id);
+                setArticles(fetchedArticles);
+            } catch (err) {
+                console.error("Article fetch failed:", err);
+            }
+        };
+
+        fetchArticles();
+    }, [currentPageIndex, pages]);
 
     const currentPage = pages[currentPageIndex];
 
-    const handlePageSelect = (index) => {
-        if (index >= 0 && index < pages.length) {
-            setCurrentPageIndex(index);
-            setSelectedArticle(null); // Clear selected article when changing page
-        }
-    };
-
-    const handleArticleClick = (article) => {
-        setSelectedArticle(article);
-        setRightPanelCollapsed(false); // Auto-expand right panel
-    };
-
-    const goToNextPage = () => {
-        if (currentPageIndex < pages.length - 1) {
-            handlePageSelect(currentPageIndex + 1);
-        }
-    };
-
-    const goToPrevPage = () => {
-        if (currentPageIndex > 0) {
-            handlePageSelect(currentPageIndex - 1);
-        }
-    };
-
-    if (loading && pages.length === 0) {
-        return (
-            <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-                <div className="text-center">
-                    <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-                    <p className="text-gray-600 dark:text-gray-400 font-medium tracking-widest uppercase text-[10px]">
-                        Syncing with Newsroom Engine...
-                    </p>
-                </div>
-            </div>
+    const handleCoordinateClick = ({ x, y, pageUrl }) => {
+        // Dynamic Fragment Logic (Hans India Style)
+        // If user clicks a non-hotspot area, we create a temporary "Crop Preview"
+        // But first, check if any existing article contains this coordinate
+        const hit = articles.find(art =>
+            x >= art.rect.x && x <= (art.rect.x + art.rect.w) &&
+            y >= art.rect.y && y <= (art.rect.y + art.rect.h)
         );
-    }
 
-    if (error) {
-        return (
-            <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-                <div className="text-center max-w-md p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
-                    <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <span className="text-3xl">⚠️</span>
-                    </div>
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                        System Sync Failure
-                    </h2>
-                    <p className="text-gray-600 dark:text-gray-400 mb-4">
-                        {error}
-                    </p>
-                    <button
-                        onClick={() => window.location.reload()}
-                        className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-                    >
-                        Re-initialize Engine
-                    </button>
-                </div>
-            </div>
-        );
-    }
+        if (hit) {
+            setSelectedArticle({ ...hit, imageUrl: pageUrl });
+        } else {
+            // Dynamic Crop (30x15% area around click)
+            setSelectedArticle({
+                id: 'discover-' + Date.now(),
+                headline: 'Digital Fragment Captured',
+                content: 'This region has been cropped for clarity. For full article text, please click a pre-defined news node.',
+                rect: { x: x - 15, y: y - 7.5, w: 30, h: 15 },
+                imageUrl: pageUrl,
+                verified: false
+            });
+        }
+    };
 
-    if (pages.length === 0) {
+    if (loading) {
         return (
-            <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-                <div className="text-center max-w-md p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
-                    <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <Newspaper size={40} className="text-gray-400" />
-                    </div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
-                        No Edition Live
-                    </h2>
-                    <p className="text-gray-600 dark:text-gray-400 mb-6 font-medium italic">
-                        {selectedDate ? `No published content found for ${selectedDate}` : 'Our journalists are currently preparing the next edition.'}
-                    </p>
-                    <div className="flex gap-3 justify-center">
-                        {selectedDate && (
-                            <button
-                                onClick={() => setSelectedDate(null)}
-                                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-black uppercase tracking-widest text-[10px] transition-all"
-                            >
-                                Back to Today
-                            </button>
-                        )}
-                    </div>
+            <div className="h-screen flex items-center justify-center bg-[#0B0F19]">
+                <div className="text-center space-y-6">
+                    <Loader2 className="w-12 h-12 text-blue-500 animate-spin mx-auto" />
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em] animate-pulse">Initializing Newsroom Engine...</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden">
-            {/* Top Header */}
-            <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex-shrink-0 z-50">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-6">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-                                <Newspaper size={20} className="text-white" />
-                            </div>
-                            <div>
-                                <h1 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tighter italic leading-none">
-                                    ASRE HAZIR <span className="text-blue-600 font-black">E-PAPER</span>
-                                </h1>
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Digital Edition Portal</p>
-                            </div>
+        <div className="h-screen flex flex-col bg-[#0B0F19] text-white overflow-hidden font-sans">
+            {/* Optimized Header (Desktop-Centric) */}
+            <header className="h-20 glass-panel border-b border-white/5 px-8 flex items-center justify-between z-50 shrink-0">
+                <div className="flex items-center gap-10">
+                    <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+                            <Newspaper size={20} className="text-white" />
                         </div>
-                        {currentPage && (
-                            <div className="hidden sm:flex items-center gap-2">
-                                <span className="px-4 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-[10px] font-black uppercase tracking-widest rounded-full border border-blue-100 dark:border-blue-900/50">
-                                    Sheet {currentPageIndex + 1} / {pages.length}
-                                </span>
-                            </div>
-                        )}
+                        <div>
+                            <h1 className="text-sm font-black italic uppercase tracking-tighter leading-none">ASRE HAZIR <span className="text-blue-500">DIGITAL</span></h1>
+                            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mt-1">Industrial E-Paper Feed</p>
+                        </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                        {/* Edition Date Selector */}
-                        {editionDates.length > 0 && (
-                            <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-700/50 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700">
-                                <Calendar size={14} className="text-blue-500" />
-                                <select
-                                    value={selectedDate || ''}
-                                    onChange={(e) => setSelectedDate(e.target.value || null)}
-                                    className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest text-gray-900 dark:text-white focus:outline-none focus:ring-0 cursor-pointer"
-                                >
-                                    {editionDates.map(date => (
-                                        <option key={date} value={date} className="dark:bg-gray-800">
-                                            {new Date(date).toLocaleDateString('en-US', {
-                                                year: 'numeric',
-                                                month: 'short',
-                                                day: 'numeric'
-                                            }).toUpperCase()}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
-
-                        {/* Page Navigation */}
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={goToPrevPage}
-                                disabled={currentPageIndex === 0}
-                                className="p-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-blue-600 hover:text-white disabled:opacity-30 disabled:hover:bg-gray-100 disabled:hover:text-current rounded-xl transition-all"
+                    <div className="hidden lg:flex items-center gap-3">
+                        <div className="h-8 w-px bg-white/5 mx-2" />
+                        <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-xl border border-white/5">
+                            <Calendar size={14} className="text-blue-500" />
+                            <select
+                                value={selectedDate || ''}
+                                onChange={(e) => setSelectedDate(e.target.value)}
+                                className="bg-transparent text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer"
                             >
-                                <ChevronLeft size={18} />
-                            </button>
-                            <button
-                                onClick={goToNextPage}
-                                disabled={currentPageIndex === pages.length - 1}
-                                className="p-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-blue-600 hover:text-white disabled:opacity-30 disabled:hover:bg-gray-100 disabled:hover:text-current rounded-xl transition-all"
-                            >
-                                <ChevronRight size={18} />
-                            </button>
+                                {editions.map(e => (
+                                    <option key={e.id} value={e.editionDate} className="bg-[#111827]">{e.editionDate}</option>
+                                ))}
+                            </select>
                         </div>
                     </div>
                 </div>
+
+                <div className="flex items-center gap-6">
+                    <div className="hidden md:flex items-center gap-4">
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 rounded-lg">
+                            <Activity size={12} className="text-green-500" />
+                            <span className="text-[9px] font-black text-green-500 uppercase tracking-widest">Live Sync</span>
+                        </div>
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 rounded-lg">
+                            <Clock size={12} className="text-blue-500" />
+                            <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest">{new Date().toLocaleTimeString()}</span>
+                        </div>
+                    </div>
+                    <button className="p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all">
+                        <User size={18} className="text-gray-400" />
+                    </button>
+                </div>
             </header>
 
-            {/* 3-Panel Layout */}
+            {/* Main Workspace */}
             <div className="flex-1 flex overflow-hidden">
-                {/* LEFT PANEL - Page Thumbnails */}
-                <aside
-                    className={`bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 overflow-y-auto transition-all duration-300 ${isMobile
-                        ? (leftPanelCollapsed ? 'w-0' : 'fixed inset-0 z-[60] w-3/4 shadow-2xl')
-                        : (leftPanelCollapsed ? 'w-0' : 'w-72')
-                        }`}
-                >
-                    {(!leftPanelCollapsed || !isMobile) && (
-                        <div className="h-full">
-                            <PageThumbnailList
-                                pages={pages}
-                                activePageIndex={currentPageIndex}
-                                onPageSelect={(idx) => {
-                                    handlePageSelect(idx);
-                                    if (isMobile) setLeftPanelCollapsed(true);
-                                }}
-                            />
-                        </div>
-                    )}
+                {/* Thumbnails Sidebar */}
+                <aside className={`bg-[#111827] border-r border-white/5 transition-all duration-300 flex flex-col shrink-0 ${leftPanelCollapsed ? 'w-0' : 'w-72'}`}>
+                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                        <PageThumbnailList
+                            pages={pages}
+                            activePageIndex={currentPageIndex}
+                            onPageSelect={(idx) => {
+                                setCurrentPageIndex(idx);
+                                if (isMobile) setLeftPanelCollapsed(true);
+                            }}
+                        />
+                    </div>
                 </aside>
 
-                {/* CENTER PANEL - Full Page Viewer */}
-                <main className="flex-1 overflow-hidden relative bg-[#0B0F19]">
-                    {/* Mobile Thumbnail Toggle */}
-                    {isMobile && (
+                {/* Central Canvas (The Reader) */}
+                <main className="flex-1 relative bg-black overflow-hidden flex flex-col">
+                    <div className="flex-1 overflow-hidden relative">
+                        {pageLoading ? (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-20">
+                                <Loader2 className="animate-spin text-blue-500" />
+                            </div>
+                        ) : (
+                            <PageViewer
+                                page={{ ...currentPage, articles }}
+                                onArticleClick={(art) => setSelectedArticle({ ...art, imageUrl: currentPage.imageUrl })}
+                                onCoordinateClick={handleCoordinateClick}
+                            />
+                        )}
+                    </div>
+
+                    {/* Navigation Rail */}
+                    <div className="h-16 bg-[#111827]/80 backdrop-blur-xl border-t border-white/5 flex items-center justify-between px-8 z-20 shrink-0">
                         <button
                             onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
-                            className="absolute bottom-10 left-6 z-20 p-4 bg-blue-600 text-white rounded-2xl shadow-xl shadow-blue-500/20 active:scale-90 transition-all"
+                            className="p-2.5 hover:bg-white/5 rounded-xl text-gray-500 transition-colors"
                         >
-                            <ChevronRight size={20} className={`${leftPanelCollapsed ? '' : 'rotate-180'} transition-transform`} />
+                            <Sidebar size={20} />
                         </button>
-                    )}
 
-                    <PageViewer
-                        page={currentPage}
-                        onArticleClick={handleArticleClick}
-                    />
+                        <div className="flex items-center gap-4">
+                            <button
+                                onClick={() => setCurrentPageIndex(p => Math.max(0, p - 1))}
+                                disabled={currentPageIndex === 0}
+                                className="flex items-center gap-3 px-6 py-2 bg-white/5 hover:bg-white/10 disabled:opacity-20 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all"
+                            >
+                                <ChevronLeft size={16} /> Previous
+                            </button>
+                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{currentPageIndex + 1} // {pages.length}</span>
+                            <button
+                                onClick={() => setCurrentPageIndex(p => Math.min(pages.length - 1, p + 1))}
+                                disabled={currentPageIndex === pages.length - 1}
+                                className="flex items-center gap-3 px-6 py-2 bg-white/5 hover:bg-white/10 disabled:opacity-20 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all"
+                            >
+                                Next <ChevronRight size={16} />
+                            </button>
+                        </div>
+
+                        <div className="w-10" />
+                    </div>
                 </main>
 
-                {/* RIGHT PANEL - Article Preview (Desktop Only) */}
-                {!isMobile && (
-                    <aside
-                        className={`bg-[#0B0F19] border-l border-white/5 overflow-hidden transition-all duration-500 shadow-2xl z-30 ${rightPanelCollapsed || !selectedArticle ? 'w-0' : 'w-[500px]'
-                            }`}
+                {/* Article Intelligence Panel (Right Sidebar) */}
+                <aside className={`bg-[#0B0F19] border-l border-white/5 transition-all duration-500 overflow-hidden relative z-30 shrink-0 ${!selectedArticle ? 'w-0' : 'w-[550px]'}`}>
+                    {selectedArticle && (
+                        <ArticlePreview
+                            article={selectedArticle}
+                            onClose={() => setSelectedArticle(null)}
+                            onNext={() => {
+                                const idx = articles.findIndex(a => a.id === selectedArticle.id);
+                                if (idx < articles.length - 1) setSelectedArticle({ ...articles[idx + 1], imageUrl: currentPage.imageUrl });
+                            }}
+                            onPrev={() => {
+                                const idx = articles.findIndex(a => a.id === selectedArticle.id);
+                                if (idx > 0) setSelectedArticle({ ...articles[idx - 1], imageUrl: currentPage.imageUrl });
+                            }}
+                        />
+                    )}
+                </aside>
+            </div>
+
+            {/* Mobile Sheet (Bottom Up) */}
+            <AnimatePresence>
+                {isMobile && selectedArticle && (
+                    <motion.div
+                        initial={{ y: '100%' }}
+                        animate={{ y: 0 }}
+                        exit={{ y: '100%' }}
+                        className="fixed inset-0 z-[100] flex flex-col bg-[#0B0F19]"
                     >
-                        {selectedArticle && (
+                        <div className="p-4 flex justify-between items-center border-b border-white/5">
+                            <span className="text-[10px] font-black uppercase tracking-widest">Article Reader</span>
+                            <button onClick={() => setSelectedArticle(null)} className="p-2 bg-white/5 rounded-xl"><ChevronLeft size={20} /></button>
+                        </div>
+                        <div className="flex-1 overflow-hidden">
                             <ArticlePreview
                                 article={selectedArticle}
                                 onClose={() => setSelectedArticle(null)}
-                                onNext={() => {
-                                    const arts = currentPage.articles || [];
-                                    const currentIdx = arts.findIndex(a => a.id === selectedArticle.id);
-                                    if (currentIdx < arts.length - 1) setSelectedArticle(arts[currentIdx + 1]);
-                                }}
-                                onPrev={() => {
-                                    const arts = currentPage.articles || [];
-                                    const currentIdx = arts.findIndex(a => a.id === selectedArticle.id);
-                                    if (currentIdx > 0) setSelectedArticle(arts[currentIdx - 1]);
-                                }}
                             />
-                        )}
-                    </aside>
-                )}
-            </div>
-
-            {/* MOBILE MODAL - Article Preview */}
-            <AnimatePresence>
-                {isMobile && selectedArticle && (
-                    <div className="fixed inset-0 z-[100] flex items-end justify-center">
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="absolute inset-0 bg-black/90 backdrop-blur-md"
-                            onClick={() => setSelectedArticle(null)}
-                        />
-
-                        <motion.div
-                            initial={{ y: '100%' }}
-                            animate={{ y: 0 }}
-                            exit={{ y: '100%' }}
-                            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-                            className="relative w-full max-h-[95vh] bg-[#0B0F19] rounded-t-[3rem] shadow-2xl overflow-hidden border-t border-white/5"
-                        >
-                            <div className="w-12 h-1.5 bg-white/10 rounded-full mx-auto my-6" />
-                            <div className="h-[calc(95vh-80px)]">
-                                <ArticlePreview
-                                    article={selectedArticle}
-                                    onClose={() => setSelectedArticle(null)}
-                                    onNext={() => {
-                                        const arts = currentPage.articles || [];
-                                        const currentIdx = arts.findIndex(a => a.id === selectedArticle.id);
-                                        if (currentIdx < arts.length - 1) setSelectedArticle(arts[currentIdx + 1]);
-                                    }}
-                                    onPrev={() => {
-                                        const arts = currentPage.articles || [];
-                                        const currentIdx = arts.findIndex(a => a.id === selectedArticle.id);
-                                        if (currentIdx > 0) setSelectedArticle(arts[currentIdx - 1]);
-                                    }}
-                                />
-                            </div>
-                        </motion.div>
-                    </div>
+                        </div>
+                    </motion.div>
                 )}
             </AnimatePresence>
         </div>
