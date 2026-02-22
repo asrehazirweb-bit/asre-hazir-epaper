@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db } from './firebase/config';
 import { collection, query, orderBy, getDocs, onSnapshot, where } from 'firebase/firestore';
@@ -73,7 +73,6 @@ const EpaperReader = () => {
                 const fetchedPages = await getPagesByEdition(edition.id);
                 setPages(fetchedPages);
                 setCurrentPageIndex(0);
-                setSelectedArticle(null);
                 incrementReaders(edition.id);
             } catch (err) {
                 console.error("Page fetch failed:", err);
@@ -104,10 +103,12 @@ const EpaperReader = () => {
 
     const currentPage = pages[currentPageIndex];
 
-    const handleCoordinateClick = ({ x, y, pageUrl }) => {
+    const handleArticleClick = useCallback((art) => {
+        setSelectedArticle({ ...art, imageUrl: currentPage?.imageUrl });
+    }, [currentPage?.imageUrl]);
+
+    const handleCoordinateClick = useCallback(({ x, y, pageUrl }) => {
         // Dynamic Fragment Logic (Hans India Style)
-        // If user clicks a non-hotspot area, we create a temporary "Crop Preview"
-        // But first, check if any existing article contains this coordinate
         const hit = articles.find(art =>
             x >= art.rect.x && x <= (art.rect.x + art.rect.w) &&
             y >= art.rect.y && y <= (art.rect.y + art.rect.h)
@@ -119,14 +120,19 @@ const EpaperReader = () => {
             // Dynamic Crop (30x15% area around click)
             setSelectedArticle({
                 id: 'discover-' + Date.now(),
-                headline: 'Digital Fragment Captured',
-                content: 'This region has been cropped for clarity. For full article text, please click a pre-defined news node.',
+                headline: 'Digital Fragment captured in this area',
+                content: 'No readable article detected in this exact coordinate. For full text, please click a pre-defined news node or try capturing a larger article block.',
                 rect: { x: x - 15, y: y - 7.5, w: 30, h: 15 },
                 imageUrl: pageUrl,
                 verified: false
             });
         }
-    };
+    }, [articles]);
+
+    const viewerPageData = useMemo(() => ({
+        ...currentPage,
+        articles
+    }), [currentPage, articles]);
 
     if (loading) {
         return (
@@ -236,17 +242,29 @@ const EpaperReader = () => {
                 {/* Central Canvas (The Reader) */}
                 <main className="flex-1 relative bg-black overflow-hidden flex flex-col">
                     <div className="flex-1 overflow-hidden relative">
-                        {pageLoading ? (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-20">
-                                <Loader2 className="animate-spin text-blue-500" />
-                            </div>
-                        ) : (
-                            <PageViewer
-                                page={{ ...currentPage, articles }}
-                                onArticleClick={(art) => setSelectedArticle({ ...art, imageUrl: currentPage.imageUrl })}
-                                onCoordinateClick={handleCoordinateClick}
-                            />
-                        )}
+                        {/* Always mount PageViewer to prevent expensive re-renders/blinking */}
+                        <PageViewer
+                            page={viewerPageData}
+                            onArticleClick={handleArticleClick}
+                            onCoordinateClick={handleCoordinateClick}
+                        />
+
+                        {/* Loading Overlay (Non-destructive) */}
+                        <AnimatePresence>
+                            {pageLoading && (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-30"
+                                >
+                                    <div className="text-center space-y-4">
+                                        <Loader2 className="w-10 h-10 animate-spin text-blue-500 mx-auto" />
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em] animate-pulse">Switching Feed...</p>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </div>
 
                     {/* Navigation Rail */}

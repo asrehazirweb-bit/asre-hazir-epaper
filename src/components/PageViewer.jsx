@@ -1,12 +1,17 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, memo } from 'react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { Maximize, MousePointer2, Newspaper, ZoomIn, ZoomOut, RefreshCw, Crosshair } from 'lucide-react';
 
-const PageViewer = ({ page, onArticleClick, onCoordinateClick }) => {
+const PageViewer = memo(({ page, onArticleClick, onCoordinateClick }) => {
     const transformComponentRef = useRef(null);
     const [imageLoaded, setImageLoaded] = useState(false);
     const [scale, setScale] = useState(1);
     const containerRef = useRef(null);
+
+    // Reset image loaded state ONLY when the actual image changes
+    useEffect(() => {
+        setImageLoaded(false);
+    }, [page?.imageUrl]);
 
     // If no page is provided, show a placeholder
     if (!page) {
@@ -30,6 +35,7 @@ const PageViewer = ({ page, onArticleClick, onCoordinateClick }) => {
         if (!containerRef.current || !onCoordinateClick) return;
 
         const rect = containerRef.current.getBoundingClientRect();
+        // Calculate click coordinates relative to the image size
         const x = ((e.clientX - rect.left) / rect.width) * 100;
         const y = ((e.clientY - rect.top) / rect.height) * 100;
 
@@ -38,7 +44,7 @@ const PageViewer = ({ page, onArticleClick, onCoordinateClick }) => {
     };
 
     return (
-        <div className="h-full flex flex-col bg-[#0B0F19] overflow-hidden select-none cursor-crosshair">
+        <div className="h-full flex flex-col bg-[#0B0F19] overflow-hidden select-none">
             {/* Page Info Bar */}
             <div className="px-8 py-4 glass-panel border-b border-white/5 flex-shrink-0 z-20 flex items-center justify-between">
                 <div className="flex items-center gap-6">
@@ -58,7 +64,7 @@ const PageViewer = ({ page, onArticleClick, onCoordinateClick }) => {
             </div>
 
             {/* Main Interactive Canvas */}
-            <div className="flex-1 relative bg-[#020617] overflow-y-auto overflow-x-hidden custom-scrollbar flex justify-center">
+            <div className="flex-1 relative bg-[#020617] overflow-y-auto custom-scrollbar flex justify-center">
                 <TransformWrapper
                     ref={transformComponentRef}
                     initialScale={1}
@@ -67,20 +73,20 @@ const PageViewer = ({ page, onArticleClick, onCoordinateClick }) => {
                     centerOnInit={true}
                     limitToBounds={false}
                     doubleClick={{ disabled: true }}
-                    wheel={{ disabled: true }} // Disabling zoom on scroll per UX req
+                    panning={{ activationKeys: ["Space"], disabled: false }}
+                    wheel={{ disabled: true, step: 0.1 }}
                     onTransformed={(p) => setScale(p.state.scale)}
                 >
                     {({ zoomIn, zoomOut, resetTransform }) => (
                         <>
-                            {/* Controls Overlay (Fixed relative to the viewport) */}
                             <div className="absolute bottom-10 right-10 z-30 flex flex-col gap-3">
-                                <button onClick={() => zoomIn()} className="w-12 h-12 bg-white/5 hover:bg-white/10 backdrop-blur-xl border border-white/10 rounded-2xl flex items-center justify-center text-gray-400 hover:text-white transition-all shadow-2xl">
+                                <button onClick={() => zoomIn()} className="w-12 h-12 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/10 rounded-2xl flex items-center justify-center text-white transition-all shadow-2xl">
                                     <ZoomIn size={20} />
                                 </button>
-                                <button onClick={() => zoomOut()} className="w-12 h-12 bg-white/5 hover:bg-white/10 backdrop-blur-xl border border-white/10 rounded-2xl flex items-center justify-center text-gray-400 hover:text-white transition-all shadow-2xl">
+                                <button onClick={() => zoomOut()} className="w-12 h-12 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/10 rounded-2xl flex items-center justify-center text-white transition-all shadow-2xl">
                                     <ZoomOut size={20} />
                                 </button>
-                                <button onClick={() => resetTransform()} className="w-12 h-12 bg-white/5 hover:bg-white/10 backdrop-blur-xl border border-white/10 rounded-2xl flex items-center justify-center text-gray-400 hover:text-white transition-all shadow-2xl">
+                                <button onClick={() => resetTransform()} className="w-12 h-12 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/10 rounded-2xl flex items-center justify-center text-white transition-all shadow-2xl">
                                     <RefreshCw size={20} />
                                 </button>
                             </div>
@@ -92,7 +98,7 @@ const PageViewer = ({ page, onArticleClick, onCoordinateClick }) => {
                                 <div
                                     ref={containerRef}
                                     onClick={handleContainerClick}
-                                    className="relative shadow-[0_0_100px_rgba(0,0,0,0.8)] bg-white group"
+                                    className="relative shadow-[0_0_100px_rgba(0,0,0,0.8)] bg-white cursor-crosshair"
                                 >
                                     <img
                                         src={page.imageUrl}
@@ -100,22 +106,21 @@ const PageViewer = ({ page, onArticleClick, onCoordinateClick }) => {
                                         onLoad={handleImageLoad}
                                         onError={(e) => {
                                             console.error("❌ Image Load Error:", e);
-                                            // Fallback to show something if image fails
                                             setImageLoaded(true);
                                         }}
-                                        className={`max-w-none transition-opacity duration-1000 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                                        className={`max-w-none ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                                         style={{
                                             width: 'auto',
-                                            height: '140vh', // Large, detailed view
-                                            pointerEvents: 'none'
+                                            height: '160vh',
+                                            pointerEvents: 'none',
+                                            transition: 'opacity 0.3s ease-in-out'
                                         }}
                                     />
 
-                                    {/* HOTSPOTS LAYER */}
                                     {imageLoaded && page.articles && page.articles.map((art) => (
                                         <div
                                             key={art.id}
-                                            className={`absolute border-2 border-transparent hover:border-blue-500/50 hover:bg-blue-500/10 cursor-pointer transition-all z-20 group/hotspot ${art.verified ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                                            className={`absolute border-2 border-transparent hover:border-blue-500/50 hover:bg-blue-500/5 cursor-pointer transition-all z-20 group/hotspot ${art.verified ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                                             title={art.headline}
                                             style={{
                                                 left: `${art.rect.x}%`,
@@ -130,7 +135,7 @@ const PageViewer = ({ page, onArticleClick, onCoordinateClick }) => {
                                         >
                                             <div className="absolute inset-x-0 -bottom-8 opacity-0 group-hover/hotspot:opacity-100 flex justify-center transition-opacity">
                                                 <div className="px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded uppercase tracking-widest shadow-2xl border border-blue-400/50 scale-90">
-                                                    Open Article
+                                                    Read Article
                                                 </div>
                                             </div>
                                         </div>
@@ -141,18 +146,23 @@ const PageViewer = ({ page, onArticleClick, onCoordinateClick }) => {
                     )}
                 </TransformWrapper>
 
-                {/* Status Indicator */}
                 {!imageLoaded && (
                     <div className="absolute inset-0 flex items-center justify-center z-50 bg-[#0B0F19]">
                         <div className="flex flex-col items-center gap-6">
-                            <div className="w-16 h-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
-                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em] animate-pulse italic">Scanning Frequency...</p>
+                            <div className="w-16 h-16 border-4 border-blue-500/10 border-t-blue-500 rounded-full animate-spin" />
+                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em] animate-pulse italic">Scanning Sheet Alpha...</p>
                         </div>
                     </div>
                 )}
             </div>
         </div>
     );
-};
+}, (prevProps, nextProps) => {
+    return (
+        prevProps.page?.id === nextProps.page?.id &&
+        prevProps.page?.imageUrl === nextProps.page?.imageUrl &&
+        prevProps.page?.articles?.length === nextProps.page?.articles?.length
+    );
+});
 
 export default PageViewer;
