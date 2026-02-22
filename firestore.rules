@@ -18,10 +18,12 @@ service cloud.firestore {
 
     // 🗞️ EDITIONS & PAGES (Public for Readers, Admin for Management)
     match /editions/{editionId} {
-      // Public Read: No login required to read the newspaper
       allow read: if true; 
-      
-      // Admin Write: Only verified admins can create/update/delete
+      allow write: if isAdmin();
+    }
+    
+    match /epaper_editions/{editionId} {
+      allow read: if true; 
       allow write: if isAdmin();
     }
 

@@ -82,8 +82,8 @@ const Editions = ({ editions, onEdit, onDelete, searchQuery, setSearchQuery }) =
                                                     {edition.name}
                                                 </h3>
                                             </div>
-                                            <span className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest ${edition.status === 'PUBLISHED' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
-                                                    'bg-gray-500/10 text-gray-500 border border-gray-500/20'
+                                            <span className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest ${edition.status === 'published' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
+                                                'bg-gray-500/10 text-gray-500 border border-gray-500/20'
                                                 }`}>
                                                 {edition.status}
                                             </span>

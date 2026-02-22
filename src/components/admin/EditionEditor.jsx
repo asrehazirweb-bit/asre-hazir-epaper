@@ -26,7 +26,7 @@ const EditionEditor = () => {
     const containerRef = useRef(null);
 
     useEffect(() => {
-        const unsub = onSnapshot(doc(db, 'editions', id), (snapshot) => {
+        const unsub = onSnapshot(doc(db, 'epaper_editions', id), (snapshot) => {
             if (snapshot.exists()) {
                 setEdition({ id: snapshot.id, ...snapshot.data() });
             }
@@ -36,6 +36,24 @@ const EditionEditor = () => {
     }, [id]);
 
     const currentPage = edition?.pages?.[selectedPageIdx];
+
+    const togglePublish = async () => {
+        const newStatus = edition.status === 'published' ? 'draft' : 'published';
+        const newActive = !edition.isActive;
+
+        setSaving(true);
+        try {
+            await updateDoc(doc(db, 'epaper_editions', id), {
+                status: newStatus,
+                isActive: newActive,
+                publishedAt: serverTimestamp()
+            });
+        } catch (err) {
+            console.error("Publish toggle failed:", err);
+        } finally {
+            setSaving(false);
+        }
+    };
 
     const handleMouseDown = (e) => {
         if (!containerRef.current || activeHotspot) return;
@@ -113,7 +131,7 @@ const EditionEditor = () => {
     const handleUpdateEdition = async (data) => {
         setSaving(true);
         try {
-            await updateDoc(doc(db, 'editions', id), data);
+            await updateDoc(doc(db, 'epaper_editions', id), data);
         } catch (err) {
             console.error("Save failed:", err);
         } finally {
@@ -155,6 +173,15 @@ const EditionEditor = () => {
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
+                    {/* PUBLISH TOGGLE (MANDATORY FIX 4) */}
+                    <button
+                        onClick={togglePublish}
+                        className={`flex items-center gap-2 px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${edition.status === 'published' ? 'bg-green-600 text-white' : 'bg-amber-600 text-white'}`}
+                    >
+                        {edition.status === 'published' ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                        {edition.status === 'published' ? 'Published' : 'Draft Mode'}
+                    </button>
+
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 rounded-lg text-blue-500">
                         <Sparkles size={14} />
                         <span className="text-[10px] font-black uppercase tracking-widest">Active Mapping Session</span>

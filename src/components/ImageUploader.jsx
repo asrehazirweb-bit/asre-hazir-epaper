@@ -11,7 +11,6 @@ const ImageUploader = ({ onUploadComplete }) => {
     const [uploadedUrl, setUploadedUrl] = useState(null);
     const [pageNumber, setPageNumber] = useState(1);
     const [pageTitle, setPageTitle] = useState('');
-    const [language, setLanguage] = useState('english');
 
     const handleFileChange = (e) => {
         const file = e.target.files?.[0];
@@ -43,7 +42,7 @@ const ImageUploader = ({ onUploadComplete }) => {
                 pageNumber: parseInt(pageNumber),
                 imageUrl: url,
                 title: pageTitle || `Page ${pageNumber}`,
-                language: language,
+                language: 'english',
                 editionDate: new Date().toISOString().split('T')[0],
                 published: true,
                 articles: [] // Empty for now, can be added later
@@ -111,11 +110,16 @@ const ImageUploader = ({ onUploadComplete }) => {
                 {/* Page Metadata Inputs */}
                 {preview && !uploadedUrl && (
                     <div className="space-y-4 bg-slate-50 dark:bg-zinc-900/50 p-6 rounded-xl border border-slate-200 dark:border-zinc-800">
-                        <h3 className="text-sm font-bold text-slate-700 dark:text-zinc-300 uppercase tracking-widest mb-3">
-                            Page Details
-                        </h3>
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-sm font-bold text-slate-700 dark:text-zinc-300 uppercase tracking-widest">
+                                Page Details
+                            </h3>
+                            <span className="px-3 py-1 bg-blue-500/10 text-blue-500 rounded-lg text-[9px] font-black uppercase tracking-widest border border-blue-500/20">
+                                Global Edition (EN)
+                            </span>
+                        </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 gap-4">
                             {/* Page Number */}
                             <div>
                                 <label className="block text-xs font-bold text-slate-600 dark:text-zinc-400 mb-2 uppercase tracking-wider">
@@ -127,24 +131,9 @@ const ImageUploader = ({ onUploadComplete }) => {
                                     min="1"
                                     value={pageNumber}
                                     onChange={(e) => setPageNumber(parseInt(e.target.value) || 1)}
-                                    className="w-full px-4 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-4 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold"
                                     placeholder="1"
                                 />
-                            </div>
-
-                            {/* Language */}
-                            <div>
-                                <label className="block text-xs font-bold text-slate-600 dark:text-zinc-400 mb-2 uppercase tracking-wider">
-                                    Language
-                                </label>
-                                <select
-                                    value={language}
-                                    onChange={(e) => setLanguage(e.target.value)}
-                                    className="w-full px-4 py-2.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                >
-                                    <option value="english">English</option>
-                                    <option value="urdu">Urdu</option>
-                                </select>
                             </div>
                         </div>
 

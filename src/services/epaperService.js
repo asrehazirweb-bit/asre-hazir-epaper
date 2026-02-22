@@ -11,133 +11,130 @@ import {
     doc
 } from 'firebase/firestore';
 
-const PAGES_COLLECTION = 'epaper_pages';
+const EDITIONS_COLLECTION = 'epaper_editions';
 
 /**
- * Add a new E-paper page to Firestore
- * @param {Object} pageData - Page data including imageUrl, pageNumber, etc.
+ * Add or Update an E-paper edition
+ * @param {Object} editionData - Edition data including date, pages, status, etc.
  * @returns {Promise<string>} - Document ID
+ */
+export const saveEdition = async (editionData) => {
+    try {
+        const docData = {
+            name: editionData.name || `Edition ${editionData.editionDate}`,
+            editionDate: editionData.editionDate || new Date().toISOString().split('T')[0],
+            pages: editionData.pages || [],
+            status: editionData.status || 'draft',
+            isActive: editionData.isActive !== undefined ? editionData.isActive : false,
+            createdAt: editionData.createdAt || serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            thumbnail: editionData.thumbnail || (editionData.pages?.[0]?.imageUrl || ''),
+            readers: editionData.readers || 0,
+            battery: 100, // Mock for pulse UI
+            online: true
+        };
+
+        let docRef;
+        if (editionData.id) {
+            docRef = doc(db, EDITIONS_COLLECTION, editionData.id);
+            await updateDoc(docRef, docData);
+            return editionData.id;
+        } else {
+            const result = await addDoc(collection(db, EDITIONS_COLLECTION), docData);
+            return result.id;
+        }
+    } catch (error) {
+        console.error('❌ Error saving edition:', error);
+        throw error;
+    }
+};
+
+/**
+ * Legacy support for addEpaperPage, but redirected to editions logic
  */
 export const addEpaperPage = async (pageData) => {
     try {
-        const docRef = await addDoc(collection(db, PAGES_COLLECTION), {
-            pageNumber: pageData.pageNumber,
-            imageUrl: pageData.imageUrl,
-            editionDate: pageData.editionDate || new Date().toISOString().split('T')[0],
-            language: pageData.language || 'english',
-            published: pageData.published !== undefined ? pageData.published : true,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            // Optional metadata
-            title: pageData.title || `Page ${pageData.pageNumber}`,
-            description: pageData.description || '',
-            articles: pageData.articles || []
-        });
+        // Find if an edition for this date already exists
+        const q = query(
+            collection(db, EDITIONS_COLLECTION),
+            where("editionDate", "==", pageData.editionDate)
+        );
+        const snapshot = await getDocs(q);
 
-        console.log('✅ Page added to Firestore:', docRef.id);
-        return docRef.id;
+        let edition;
+        if (!snapshot.empty) {
+            const docSnap = snapshot.docs[0];
+            edition = { id: docSnap.id, ...docSnap.data() };
+
+            // Add page to existing edition
+            const pages = [...(edition.pages || [])];
+            pages.push({
+                pageNumber: pageData.pageNumber,
+                imageUrl: pageData.imageUrl,
+                title: pageData.title || `Page ${pageData.pageNumber}`,
+                articles: []
+            });
+
+            // Sort pages
+            pages.sort((a, b) => a.pageNumber - b.pageNumber);
+
+            await updateDoc(doc(db, EDITIONS_COLLECTION, edition.id), {
+                pages,
+                updatedAt: serverTimestamp(),
+                thumbnail: pages[0]?.imageUrl || edition.thumbnail
+            });
+            return edition.id;
+        } else {
+            // Create new edition
+            const newEdition = {
+                editionDate: pageData.editionDate,
+                pages: [{
+                    pageNumber: pageData.pageNumber,
+                    imageUrl: pageData.imageUrl,
+                    title: pageData.title || `Page ${pageData.pageNumber}`,
+                    articles: []
+                }],
+                status: 'draft', // New uploads start as draft
+                isActive: false // New uploads are not active by default
+            };
+            return await saveEdition(newEdition);
+        }
     } catch (error) {
-        console.error('❌ Error adding page to Firestore:', error);
+        console.error('❌ Error adding page:', error);
         throw error;
     }
 };
 
 /**
- * Fetch all published E-paper pages
- * @param {string} language - Language filter (optional)
- * @param {string} editionDate - Edition date filter (optional)
- * @returns {Promise<Array>} - Array of page objects
+ * Fetch all published E-paper editions (Real-time listener is preferred in component)
  */
-export const getPublishedPages = async (language = 'english', editionDate = null) => {
+export const getPublishedEditions = async () => {
     try {
-        // Simplified query - fetch all pages and filter client-side
-        // This avoids the composite index requirement
-        const querySnapshot = await getDocs(collection(db, PAGES_COLLECTION));
-        let pages = [];
-
-        querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            // Filter by published status, language, and optional date
-            if (data.published === true && data.language === language) {
-                if (!editionDate || data.editionDate === editionDate) {
-                    pages.push({
-                        id: doc.id,
-                        ...data
-                    });
-                }
-            }
-        });
-
-        // Sort by page number client-side
-        pages.sort((a, b) => a.pageNumber - b.pageNumber);
-
-        console.log(`✅ Fetched ${pages.length} published pages from Firestore`);
-        return pages;
+        const q = query(
+            collection(db, EDITIONS_COLLECTION),
+            where("status", "==", "published"),
+            where("isActive", "==", true),
+            orderBy('editionDate', 'desc')
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     } catch (error) {
-        console.error('❌ Error fetching pages from Firestore:', error);
+        console.error('❌ Error fetching published editions:', error);
         throw error;
     }
 };
 
 /**
- * Get all unique edition dates
- * @returns {Promise<Array>} - Array of edition dates
+ * Delete an edition
  */
-export const getEditionDates = async () => {
+export const deleteEdition = async (editionId) => {
     try {
-        const querySnapshot = await getDocs(collection(db, PAGES_COLLECTION));
-        const dates = new Set();
-
-        querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            if (data.editionDate) {
-                dates.add(data.editionDate);
-            }
-        });
-
-        return Array.from(dates).sort().reverse(); // Most recent first
+        const { deleteDoc } = await import('firebase/firestore');
+        await deleteDoc(doc(db, EDITIONS_COLLECTION, editionId));
+        console.log(`✅ Edition ${editionId} deleted`);
     } catch (error) {
-        console.error('❌ Error fetching edition dates:', error);
-        return [];
-    }
-};
-
-/**
- * Update page published status
- * @param {string} pageId - Document ID
- * @param {boolean} published - Published status
- */
-export const updatePageStatus = async (pageId, published) => {
-    try {
-        const pageRef = doc(db, PAGES_COLLECTION, pageId);
-        await updateDoc(pageRef, {
-            published,
-            updatedAt: serverTimestamp()
-        });
-        console.log(`✅ Page ${pageId} status updated to: ${published}`);
-    } catch (error) {
-        console.error('❌ Error updating page status:', error);
+        console.error('❌ Error deleting edition:', error);
         throw error;
     }
 };
 
-/**
- * Delete all pages (for testing/cleanup)
- * WARNING: Use with caution!
- */
-export const deleteAllPages = async () => {
-    try {
-        const querySnapshot = await getDocs(collection(db, PAGES_COLLECTION));
-        const deletePromises = [];
-
-        querySnapshot.forEach((doc) => {
-            deletePromises.push(doc.ref.delete());
-        });
-
-        await Promise.all(deletePromises);
-        console.log('✅ All pages deleted');
-    } catch (error) {
-        console.error('❌ Error deleting pages:', error);
-        throw error;
-    }
-};

@@ -57,7 +57,8 @@ const AdminLayout = ({ onBack, user }) => {
 
     useEffect(() => {
         setLoading(true);
-        const q = query(collection(db, 'editions'), orderBy('createdAt', 'desc'));
+        // Unified collection name (MANDATORY FIX 1)
+        const q = query(collection(db, 'epaper_editions'), orderBy('createdAt', 'desc'));
 
         const unsub = onSnapshot(q,
             (snapshot) => {
@@ -72,7 +73,8 @@ const AdminLayout = ({ onBack, user }) => {
 
                 setLiveStats({
                     totalEditions: data.length,
-                    activeEditions: data.filter(e => e.status === 'PUBLISHED').length,
+                    // Use published status (MANDATORY FIX 4)
+                    activeEditions: data.filter(e => e.status === 'published' && e.isActive).length,
                     lowBattery: data.filter(e => e.battery < 30).length,
                     totalReaders: data.reduce((sum, e) => sum + (e.readers || 0), 0)
                 });
@@ -232,6 +234,14 @@ const AdminLayout = ({ onBack, user }) => {
                         <p className="text-xs text-gray-500 font-medium">Monitoring newsroom activity in precision-time.</p>
                     </div>
                     <div className="flex items-center gap-3">
+                        {/* VIEW MAIN PORTAL BUTTON (MANDATORY FIX 3) */}
+                        <button
+                            onClick={() => window.open('/', '_blank')}
+                            className="px-5 py-2.5 bg-white text-black hover:bg-blue-600 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 flex items-center gap-2"
+                        >
+                            <Monitor size={14} />
+                            View Live E-Paper Portal
+                        </button>
                         <button className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-500/20 active:scale-95 flex items-center gap-2">
                             <Zap size={14} className="fill-current" />
                             Action Point
