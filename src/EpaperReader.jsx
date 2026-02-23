@@ -5,6 +5,7 @@ import { collection, query, orderBy, getDocs, onSnapshot, where } from 'firebase
 import PageThumbnailList from './components/PageThumbnailList';
 import PageViewer from './components/PageViewer';
 import ArticlePreview from './components/ArticlePreview';
+import PdfViewer from './components/PdfViewer';
 import {
     Loader2, Calendar, Globe, Newspaper, ChevronLeft, ChevronRight,
     Maximize2, Sidebar, PanelsTopLeft, Search, User, LogIn,
@@ -32,6 +33,7 @@ const EpaperReader = () => {
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [error, setError] = useState(null);
+    const [showPdfViewer, setShowPdfViewer] = useState(false);
 
     // Refs for Request Control
     const activeRequestRef = useRef(0);
@@ -149,9 +151,15 @@ const EpaperReader = () => {
         const edition = editions.find(e => e.editionDate === selectedDate);
         if (edition) {
             setSelectedArticle(null);
-            loadFeed(selectedDate, edition.id);
+            if (edition.type === 'pdf') {
+                setShowPdfViewer(true);
+                setFeedStatus('success');
+            } else {
+                setShowPdfViewer(false);
+                loadFeed(selectedDate, edition.id);
+            }
         }
-    }, [selectedDate, editions.length > 0]); // editions.length check to ensure initial load
+    }, [selectedDate, editions]);
 
     // Handle Page Navigation within same edition
     const handlePageNavigation = useCallback(async (index) => {
@@ -273,7 +281,7 @@ const EpaperReader = () => {
                                         initial={{ opacity: 0, scale: 0.95, y: 10 }}
                                         animate={{ opacity: 1, scale: 1, y: 0 }}
                                         exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                                        className="absolute top-full left-0 mt-2 w-64 bg-[#111827] border border-white/10 rounded-2xl shadow-2xl z-[60] overflow-hidden"
+                                        className="absolute top-full left-0 mt-2 w-72 bg-[#111827] border border-white/10 rounded-2xl shadow-2xl z-[60] overflow-hidden"
                                     >
                                         <div className="p-4 border-b border-white/5 bg-black/20">
                                             <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Available Archives</p>
@@ -288,7 +296,10 @@ const EpaperReader = () => {
                                                     }}
                                                     className={`w-full px-5 py-4 text-left hover:bg-white/5 flex items-center justify-between border-b border-white/5 last:border-0 transition-colors ${selectedDate === e.editionDate ? 'bg-blue-600/10 text-blue-500' : 'text-gray-400'}`}
                                                 >
-                                                    <span className="text-[10px] font-black uppercase tracking-widest">{e.editionDate}</span>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] font-black uppercase tracking-widest">{e.editionDate}</span>
+                                                        <span className={`text-[7px] font-black uppercase mt-1 ${e.type === 'pdf' ? 'text-red-500' : 'text-blue-500'}`}>{e.type === 'pdf' ? 'PDF Portfolio' : 'Interactive'}</span>
+                                                    </div>
                                                     {selectedDate === e.editionDate && <Zap size={12} className="fill-blue-500" />}
                                                 </button>
                                             ))}
@@ -493,6 +504,19 @@ const EpaperReader = () => {
                             />
                         </div>
                     </motion.div>
+                )}
+            </AnimatePresence>
+            {/* PDf Viewer Overlay */}
+            <AnimatePresence>
+                {showPdfViewer && (
+                    <PdfViewer
+                        fileUrl={editions.find(e => e.editionDate === selectedDate)?.fileUrl}
+                        title={editions.find(e => e.editionDate === selectedDate)?.name}
+                        onClose={() => {
+                            // Optionally switch back to interactive if available, or just keep it open
+                            setShowPdfViewer(false);
+                        }}
+                    />
                 )}
             </AnimatePresence>
         </div>

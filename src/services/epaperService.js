@@ -27,10 +27,12 @@ export const saveEdition = async (editionData) => {
             name: editionData.name || `Edition ${editionData.editionDate}`,
             editionDate: editionData.editionDate || new Date().toISOString().split('T')[0],
             status: editionData.status || 'draft',
-            isActive: editionData.isActive !== undefined ? editionData.isActive : false,
+            type: editionData.type || 'image', // 'image' or 'pdf'
+            fileUrl: editionData.fileUrl || '', // For PDF editions
+            thumbnailUrl: editionData.thumbnailUrl || editionData.thumbnail || '',
+            isActive: editionData.isActive !== undefined ? editionData.isActive : true,
             createdAt: editionData.createdAt || serverTimestamp(),
             updatedAt: serverTimestamp(),
-            thumbnail: editionData.thumbnail || '',
             readers: editionData.readers || 0,
             syncStatus: 'synced',
             battery: 100

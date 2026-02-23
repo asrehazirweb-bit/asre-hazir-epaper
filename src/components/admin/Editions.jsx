@@ -83,16 +83,25 @@ const Editions = ({ editions, onEdit, onDelete }) => {
                                                     {edition.name}
                                                 </h3>
                                             </div>
-                                            <span className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest ${edition.status === 'published' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
-                                                'bg-gray-500/10 text-gray-500 border border-gray-500/20'
-                                                }`}>
-                                                {edition.status}
-                                            </span>
+                                            <div className="flex flex-col items-end gap-2">
+                                                <span className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest ${edition.status === 'published' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
+                                                    'bg-gray-500/10 text-gray-500 border border-gray-500/20'
+                                                    }`}>
+                                                    {edition.status}
+                                                </span>
+                                                <span className={`px-2 py-0.5 rounded text-[7px] font-black uppercase tracking-widest ${edition.type === 'pdf' ? 'bg-red-500 text-white' : 'bg-blue-600 text-white'}`}>
+                                                    {edition.type === 'pdf' ? 'PDF Portfolio' : 'Interactive'}
+                                                </span>
+                                            </div>
                                         </div>
 
                                         <div className="flex gap-4 md:gap-8 mb-6 md:mb-8">
-                                            <div className="w-20 md:w-24 h-28 md:h-32 rounded-xl overflow-hidden border border-white/10 shadow-2xl shrink-0 group-hover:scale-105 transition-transform duration-700">
-                                                <img src={edition.thumbnail} alt="" className="w-full h-full object-cover grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition-all" />
+                                            <div className="w-20 md:w-24 h-28 md:h-32 rounded-xl overflow-hidden border border-white/10 shadow-2xl shrink-0 group-hover:scale-105 transition-transform duration-700 bg-black/40 flex items-center justify-center">
+                                                {edition.thumbnailUrl || edition.thumbnail ? (
+                                                    <img src={edition.thumbnailUrl || edition.thumbnail} alt="" className="w-full h-full object-cover grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition-all" />
+                                                ) : (
+                                                    <FileText size={32} className="text-gray-700" />
+                                                )}
                                             </div>
                                             <div className="flex-1 flex flex-col justify-center space-y-4 md:space-y-5">
                                                 <div className="space-y-2">
@@ -122,8 +131,12 @@ const Editions = ({ editions, onEdit, onDelete }) => {
                                         </div>
 
                                         <div className="grid grid-cols-4 gap-2 md:gap-3 pt-6 border-t border-white/5">
-                                            <button onClick={() => onEdit(edition.id)} className="col-span-2 flex items-center justify-center gap-2 bg-white text-black hover:bg-gray-200 py-3 rounded-xl text-[9px] md:text-[10px] font-bold uppercase tracking-widest transition-all active:scale-95">
-                                                <Edit2 size={12} /> Control
+                                            <button
+                                                onClick={() => onEdit(edition.id)}
+                                                disabled={edition.type === 'pdf'}
+                                                className={`col-span-2 flex items-center justify-center gap-2 py-3 rounded-xl text-[9px] md:text-[10px] font-bold uppercase tracking-widest transition-all active:scale-95 ${edition.type === 'pdf' ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-white text-black hover:bg-gray-200'}`}
+                                            >
+                                                <Edit2 size={12} /> {edition.type === 'pdf' ? 'Fixed' : 'Control'}
                                             </button>
                                             <button className="flex items-center justify-center bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white py-3 rounded-xl transition-all border border-transparent hover:border-white/10">
                                                 <Eye size={14} />

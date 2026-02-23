@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { X, ChevronLeft, ChevronRight, Share2, Type, Clock, Activity, Verified, Image as ImageIcon, Link, Download } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -7,27 +7,63 @@ const ArticlePreview = ({ article, onClose, onNext, onPrev }) => {
 
     const isMobile = window.innerWidth < 768;
 
-    const getCropUrl = (url, rect) => {
-        if (!url || !rect) return null;
-        try {
-            if (url.includes('/upload/')) {
-                const baseUrl = url.split('/upload/')[0] + '/upload/';
-                const imagePath = url.split('/upload/')[1];
-                const cropParams = `c_crop,g_north_west,h_${(rect.h / 100).toFixed(3)},w_${(rect.w / 100).toFixed(3)},x_${(rect.x / 100).toFixed(3)},y_${(rect.y / 100).toFixed(3)},fl_relative,q_auto,f_auto/`;
-                return `${baseUrl}${cropParams}${imagePath}`;
-            }
-            return url;
-        } catch (e) {
-            return url;
-        }
+    const CanvasCrop = ({ imageUrl, rect, onCropReady }) => {
+        const canvasRef = useRef(null);
+        const [loading, setLoading] = useState(true);
+
+        useEffect(() => {
+            if (!imageUrl || !rect) return;
+            const canvas = canvasRef.current;
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.src = imageUrl;
+
+            img.onload = () => {
+                const { x, y, w, h } = rect;
+                // Convert percentages to actual pixels
+                const sourceX = (x / 100) * img.width;
+                const sourceY = (y / 100) * img.height;
+                const sourceW = (w / 100) * img.width;
+                const sourceH = (h / 100) * img.height;
+
+                canvas.width = sourceW;
+                canvas.height = sourceH;
+                ctx.drawImage(img, sourceX, sourceY, sourceW, sourceH, 0, 0, sourceW, sourceH);
+                setLoading(false);
+
+                if (onCropReady) {
+                    onCropReady(canvas.toDataURL('image/jpeg', 0.9));
+                }
+            };
+            img.onerror = () => {
+                console.error("Failed to load image for CanvasCrop:", imageUrl);
+                setLoading(false); // Stop loading even if there's an error
+            };
+        }, [imageUrl, rect, onCropReady]);
+
+        return (
+            <div className="relative w-full overflow-hidden flex items-center justify-center min-h-[200px] bg-[#0B0F19]">
+                {loading && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                    </div>
+                )}
+                <canvas
+                    ref={canvasRef}
+                    className={`max-w-full h-auto shadow-2xl transition-opacity duration-500 ${loading ? 'opacity-0' : 'opacity-100'}`}
+                />
+            </div>
+        );
     };
 
-    const croppedImageUrl = getCropUrl(article.imageUrl, article.rect);
+    const [croppedImageUrl, setCroppedImageUrl] = useState(null);
 
     const handleDownload = async () => {
-        if (!croppedImageUrl) return;
+        const downloadUrl = croppedImageUrl || article.imageUrl;
+        if (!downloadUrl) return;
         try {
-            const response = await fetch(croppedImageUrl);
+            const response = await fetch(downloadUrl);
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -39,8 +75,7 @@ const ArticlePreview = ({ article, onClose, onNext, onPrev }) => {
             window.URL.revokeObjectURL(url);
         } catch (error) {
             console.error('Download failed:', error);
-            // Fallback: open in new tab
-            window.open(croppedImageUrl, '_blank');
+            window.open(downloadUrl, '_blank');
         }
     };
 
@@ -74,15 +109,14 @@ const ArticlePreview = ({ article, onClose, onNext, onPrev }) => {
                 <div className="flex flex-col">
                     {/* PHOTO SECTION (Top) */}
                     <div className="p-6 lg:p-10 pb-0">
-                        <div className="rounded-2xl lg:rounded-[2.5rem] overflow-hidden border border-white/10 bg-black shadow-2xl relative group">
-                            <img
-                                src={croppedImageUrl}
-                                alt="Article Clip"
-                                className="w-full h-auto object-contain bg-[#0B0F19]"
-                                style={{ minHeight: '200px' }}
+                        <div className="rounded-2xl lg:rounded-[1.5rem] overflow-hidden border border-white/10 bg-black shadow-2xl relative group">
+                            <CanvasCrop
+                                imageUrl={article.imageUrl}
+                                rect={article.rect}
+                                onCropReady={setCroppedImageUrl}
                             />
                             <div className="absolute bottom-6 right-6 px-4 py-1.5 bg-black/60 backdrop-blur-md rounded-full text-[8px] font-black uppercase tracking-widest border border-white/10">
-                                Original Clip View
+                                Digital Segment Node
                             </div>
                         </div>
                     </div>
