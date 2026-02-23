@@ -8,9 +8,9 @@ const Editions = ({ editions, onEdit, onDelete }) => {
     const [searchQuery, setSearchQuery] = useState('');
 
     return (
-        <div className="space-y-8 pb-20">
+        <div className="space-y-6 md:space-y-8 pb-20 px-2 sm:px-0">
             {/* Control Bar */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 glass-panel p-6 rounded-2xl">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 md:gap-6 glass-panel p-4 md:p-6 rounded-2xl">
                 <div className="relative group flex-1 max-w-lg">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-blue-500 transition-colors" size={18} />
                     <input
@@ -22,13 +22,13 @@ const Editions = ({ editions, onEdit, onDelete }) => {
                     />
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3 md:gap-4">
                     <button
                         onClick={() => setShowUpload(!showUpload)}
-                        className={`flex items-center gap-2 pr-6 pl-4 py-3.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-all active:scale-95 ${showUpload ? 'bg-white text-black' : 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 hover:bg-blue-700'}`}
+                        className={`flex-1 md:flex-none flex items-center justify-center gap-2 pr-6 pl-4 py-3 md:py-3.5 rounded-xl font-bold text-[10px] md:text-xs uppercase tracking-widest transition-all active:scale-95 ${showUpload ? 'bg-white text-black' : 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 hover:bg-blue-700'}`}
                     >
-                        {showUpload ? <X size={18} /> : <Plus size={18} />}
-                        {showUpload ? 'Close Dashboard' : 'Deploy Edition'}
+                        {showUpload ? <X size={16} /> : <Plus size={16} />}
+                        {showUpload ? 'Close' : 'Deploy Edition'}
                     </button>
                     <div className="p-3 bg-white/5 border border-white/5 rounded-xl text-gray-400 hover:text-white cursor-pointer transition-colors">
                         <Settings2 size={20} />
@@ -43,12 +43,12 @@ const Editions = ({ editions, onEdit, onDelete }) => {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -20 }}
-                        className="premium-card p-12 bg-[#111827]/80 border-dashed border-blue-500/30"
+                        className="premium-card p-6 md:p-12 bg-[#111827]/80 border-dashed border-blue-500/30"
                     >
                         <div className="max-w-2xl mx-auto space-y-8">
                             <div className="text-center">
-                                <h3 className="text-2xl font-bold text-white tracking-tight italic">Edition Deployment Module</h3>
-                                <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.2em] mt-3">Upload source files for digital distribution</p>
+                                <h3 className="text-xl md:text-2xl font-bold text-white tracking-tight italic">Edition Deployment Module</h3>
+                                <p className="text-gray-500 text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] mt-3">Upload source files for digital distribution</p>
                             </div>
                             <ImageUploader onUploadComplete={(url) => {
                                 console.log('New edition ready:', url);
@@ -75,7 +75,7 @@ const Editions = ({ editions, onEdit, onDelete }) => {
                                     transition={{ delay: idx * 0.05 }}
                                     className="premium-card overflow-hidden group hover:border-blue-500/50 transition-all duration-500"
                                 >
-                                    <div className="p-8">
+                                    <div className="p-5 md:p-8">
                                         <div className="flex items-start justify-between mb-8">
                                             <div className="space-y-1">
                                                 <div className="text-[9px] font-black text-blue-500 uppercase tracking-[0.3em]">REF: {edition.id.slice(0, 8)}</div>
@@ -90,11 +90,11 @@ const Editions = ({ editions, onEdit, onDelete }) => {
                                             </span>
                                         </div>
 
-                                        <div className="flex gap-8 mb-8">
-                                            <div className="w-24 h-32 rounded-xl overflow-hidden border border-white/10 shadow-2xl shrink-0 group-hover:scale-105 transition-transform duration-700">
+                                        <div className="flex gap-4 md:gap-8 mb-6 md:mb-8">
+                                            <div className="w-20 md:w-24 h-28 md:h-32 rounded-xl overflow-hidden border border-white/10 shadow-2xl shrink-0 group-hover:scale-105 transition-transform duration-700">
                                                 <img src={edition.thumbnail} alt="" className="w-full h-full object-cover grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition-all" />
                                             </div>
-                                            <div className="flex-1 flex flex-col justify-center space-y-5">
+                                            <div className="flex-1 flex flex-col justify-center space-y-4 md:space-y-5">
                                                 <div className="space-y-2">
                                                     <div className="flex justify-between items-center text-[10px] font-black text-gray-500 uppercase tracking-widest">
                                                         Device Pulse
@@ -121,15 +121,15 @@ const Editions = ({ editions, onEdit, onDelete }) => {
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-4 gap-3 pt-6 border-t border-white/5">
-                                            <button onClick={() => onEdit(edition.id)} className="col-span-2 flex items-center justify-center gap-2 bg-white text-black hover:bg-gray-200 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all active:scale-95">
-                                                <Edit2 size={14} /> Control
+                                        <div className="grid grid-cols-4 gap-2 md:gap-3 pt-6 border-t border-white/5">
+                                            <button onClick={() => onEdit(edition.id)} className="col-span-2 flex items-center justify-center gap-2 bg-white text-black hover:bg-gray-200 py-3 rounded-xl text-[9px] md:text-[10px] font-bold uppercase tracking-widest transition-all active:scale-95">
+                                                <Edit2 size={12} /> Control
                                             </button>
                                             <button className="flex items-center justify-center bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white py-3 rounded-xl transition-all border border-transparent hover:border-white/10">
-                                                <Eye size={16} />
+                                                <Eye size={14} />
                                             </button>
                                             <button onClick={() => onDelete(edition.id)} className="flex items-center justify-center bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white py-3 rounded-xl transition-all group-hover:shadow-lg group-hover:shadow-red-500/10">
-                                                <Trash2 size={16} />
+                                                <Trash2 size={14} />
                                             </button>
                                         </div>
                                     </div>

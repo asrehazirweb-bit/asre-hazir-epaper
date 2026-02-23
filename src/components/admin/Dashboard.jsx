@@ -11,7 +11,7 @@ const Dashboard = ({ stats, editions }) => {
     ];
 
     return (
-        <div className="space-y-8 pb-12">
+        <div className="space-y-6 md:space-y-8 pb-12 px-2 sm:px-0">
             {/* Top Stat Row */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {statCards.map((stat, idx) => (
@@ -20,7 +20,7 @@ const Dashboard = ({ stats, editions }) => {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: idx * 0.05 }}
-                        className="premium-card p-6 flex flex-col justify-between group cursor-default"
+                        className="premium-card p-4 md:p-6 flex flex-col justify-between group cursor-default"
                     >
                         <div className="flex items-center justify-between mb-8">
                             <div className={`p-2.5 rounded-xl bg-${stat.color}-500/10 text-${stat.color}-500 group-hover:scale-110 transition-transform duration-300`}>
@@ -32,9 +32,9 @@ const Dashboard = ({ stats, editions }) => {
                             </div>
                         </div>
                         <div>
-                            <p className="text-gray-500 text-[11px] font-bold uppercase tracking-widest mb-1">{stat.label}</p>
-                            <div className="text-3xl font-bold text-white tracking-tight">{stat.value}</div>
-                            <p className="text-[10px] text-gray-400 mt-2 font-medium">{stat.sub}</p>
+                            <p className="text-gray-500 text-[9px] md:text-[11px] font-bold uppercase tracking-widest mb-1">{stat.label}</p>
+                            <div className="text-2xl md:text-3xl font-bold text-white tracking-tight">{stat.value}</div>
+                            <p className="text-[9px] md:text-[10px] text-gray-400 mt-2 font-medium">{stat.sub}</p>
                         </div>
                     </motion.div>
                 ))}
@@ -42,27 +42,27 @@ const Dashboard = ({ stats, editions }) => {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Newsroom Performance Grid */}
-                <div className="lg:col-span-2 premium-card p-8 bg-[#111827]/50">
-                    <div className="flex items-center justify-between mb-10">
+                <div className="lg:col-span-2 premium-card p-5 md:p-8 bg-[#111827]/50">
+                    <div className="flex items-center justify-between mb-8 md:mb-10">
                         <div>
-                            <h3 className="text-lg font-bold text-white tracking-tight">Active Edition Pulse</h3>
-                            <p className="text-xs text-gray-500 mt-1">Real-time engagement across top 4 publishing nodes.</p>
+                            <h3 className="text-base md:text-lg font-bold text-white tracking-tight">Active Edition Pulse</h3>
+                            <p className="text-[10px] md:text-xs text-gray-500 mt-1">Real-time engagement node metrics.</p>
                         </div>
-                        <button className="text-[11px] font-bold text-blue-500 uppercase tracking-widest hover:text-blue-400 transition-colors">Generate Report</button>
+                        <button className="text-[9px] md:text-[11px] font-bold text-blue-500 uppercase tracking-widest hover:text-blue-400 transition-colors">Report</button>
                     </div>
 
-                    <div className="space-y-8">
+                    <div className="space-y-6 md:space-y-8">
                         {editions.slice(0, 4).map((edition) => (
-                            <div key={edition.id} className="flex items-center gap-6 group">
-                                <div className="w-14 h-18 bg-[#1f2937] rounded-lg overflow-hidden border border-white/5 shrink-0 shadow-xl group-hover:scale-105 transition-transform duration-500">
+                            <div key={edition.id} className="flex items-center gap-4 md:gap-6 group">
+                                <div className="w-12 md:w-14 h-16 md:h-18 bg-[#1f2937] rounded-lg overflow-hidden border border-white/5 shrink-0 shadow-xl group-hover:scale-105 transition-transform duration-500">
                                     <img src={edition.thumbnail} alt="" className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" />
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between mb-2">
-                                        <h4 className="text-sm font-bold text-white truncate">{edition.name}</h4>
-                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                                            <MousePointer2 size={12} className="text-blue-500" />
-                                            {edition.readers} Clicks
+                                        <h4 className="text-xs md:text-sm font-bold text-white truncate">{edition.name}</h4>
+                                        <div className="text-[8px] md:text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                            <MousePointer2 size={10} className="text-blue-500" />
+                                            {edition.readers}
                                         </div>
                                     </div>
                                     <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
@@ -90,8 +90,8 @@ const Dashboard = ({ stats, editions }) => {
                 </div>
 
                 {/* System Activity Feed */}
-                <div className="premium-card p-8 border-dashed border-white/10 bg-transparent flex flex-col">
-                    <h3 className="text-sm font-bold text-white uppercase tracking-widest mb-8 border-b border-white/5 pb-4">Live Updates</h3>
+                <div className="premium-card p-5 md:p-8 border-dashed border-white/10 bg-transparent flex flex-col">
+                    <h3 className="text-[11px] md:text-sm font-bold text-white uppercase tracking-widest mb-6 md:mb-8 border-b border-white/5 pb-4">Live Updates</h3>
                     <div className="flex-1 space-y-6">
                         {[
                             { time: '2m ago', user: 'Admin', act: 'Published "Morning Express"', color: 'blue' },

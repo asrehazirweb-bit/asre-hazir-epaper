@@ -25,9 +25,21 @@ const EditionEditor = () => {
     const [startPos, setStartPos] = useState({ x: 0, y: 0 });
     const [saving, setSaving] = useState(false);
     const [ocrLoading, setOcrLoading] = useState(false);
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+    const [showThumbnails, setShowThumbnails] = useState(window.innerWidth >= 1024);
 
     const imageRef = useRef(null);
     const containerRef = useRef(null);
+
+    useEffect(() => {
+        const handleResize = () => {
+            const mobile = window.innerWidth < 1024;
+            setIsMobile(mobile);
+            if (mobile) setShowThumbnails(false);
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     // Initial Fetch: Edition and Pages
     useEffect(() => {
@@ -181,49 +193,66 @@ const EditionEditor = () => {
     return (
         <div className="h-screen flex flex-col bg-[#0B0F19] text-white overflow-hidden">
             {/* Header */}
-            <header className="h-20 glass-panel border-b border-white/5 px-8 flex items-center justify-between shrink-0 z-40">
-                <div className="flex items-center gap-6">
-                    <button onClick={() => navigate('/admin/editions')} className="p-2.5 hover:bg-white/5 rounded-xl transition-all">
+            <header className="h-20 glass-panel border-b border-white/5 px-4 md:px-8 flex items-center justify-between shrink-0 z-40">
+                <div className="flex items-center gap-3 md:gap-6">
+                    <button onClick={() => navigate('/admin/editions')} className="p-2 md:p-2.5 hover:bg-white/5 rounded-xl transition-all">
                         <ChevronLeft size={20} />
                     </button>
                     <div>
-                        <h2 className="text-sm font-black uppercase tracking-widest italic">{edition?.name} <span className="text-blue-500 mx-2">//</span> Mapping Sheet {selectedPageIdx + 1}</h2>
+                        <h2 className="text-[10px] md:text-sm font-black uppercase tracking-widest italic truncate max-w-[120px] md:max-w-none">
+                            {edition?.name} <span className="text-blue-500 mx-2 hidden md:inline">//</span>
+                            <span className="md:hidden block text-blue-500 text-[8px] mt-0.5">Page {selectedPageIdx + 1}</span>
+                            <span className="hidden md:inline text-gray-400">Sheet {selectedPageIdx + 1}</span>
+                        </h2>
                     </div>
                 </div>
-                <div className="flex items-center gap-6">
+                <div className="flex items-center gap-2 md:gap-6">
+                    <button
+                        onClick={() => setShowThumbnails(!showThumbnails)}
+                        className={`p-2 rounded-lg md:hidden ${showThumbnails ? 'bg-blue-600' : 'bg-white/5'}`}
+                    >
+                        <ImageIcon size={18} />
+                    </button>
                     <button
                         onClick={toggleEditionStatus}
-                        className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-3 transition-all ${edition?.status === 'published' ? 'bg-green-600 text-white' : 'bg-amber-600/20 text-amber-500 border border-amber-500/30'}`}
+                        className={`px-3 md:px-6 py-2 md:py-2.5 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest flex items-center gap-2 md:gap-3 transition-all ${edition?.status === 'published' ? 'bg-green-600 text-white' : 'bg-amber-600/20 text-amber-500 border border-amber-500/30'}`}
                     >
-                        {edition?.status === 'published' ? <CheckCircle size={14} /> : <AlertTriangle size={14} />}
-                        {edition?.status === 'published' ? 'Live on Portal' : 'Draft / Offline'}
+                        {edition?.status === 'published' ? <CheckCircle size={14} className="hidden xs:block" /> : <AlertTriangle size={14} className="hidden xs:block" />}
+                        {edition?.status === 'published' ? 'Live' : 'Draft'}
                     </button>
                     <a
                         href="/"
                         target="_blank"
-                        className="p-2.5 hover:bg-blue-600/10 text-gray-400 hover:text-blue-500 rounded-xl transition-all"
+                        className="p-2 md:p-2.5 hover:bg-blue-600/10 text-gray-400 hover:text-blue-500 rounded-xl transition-all hidden xs:block"
                         title="View Live Reader"
                     >
                         <Eye size={20} />
                     </a>
-                    {saving && <RefreshCw size={16} className="animate-spin text-blue-500" />}
+                    {saving && <RefreshCw size={14} className="animate-spin text-blue-500" />}
                 </div>
             </header>
 
             <div className="flex-1 flex overflow-hidden">
                 {/* Thumbnails */}
-                <aside className="w-64 border-r border-white/5 bg-[#111827]/50 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+                <aside className={`
+                    ${isMobile
+                        ? `fixed inset-y-20 left-0 z-50 transform transition-transform duration-300 ${showThumbnails ? 'translate-x-0' : '-translate-x-full'}`
+                        : 'relative w-64 border-r'}
+                    bg-[#111827] border-white/5 overflow-y-auto p-4 space-y-4 custom-scrollbar
+                `}>
                     <p className="text-[9px] font-black text-gray-600 uppercase tracking-widest px-2">Edition Hierarchy</p>
-                    {pages.map((p, idx) => (
-                        <button
-                            key={p.id}
-                            onClick={() => { setSelectedPageIdx(idx); setActiveHotspot(null); }}
-                            className={`w-full relative aspect-[1/1.4] rounded-xl overflow-hidden border-2 transition-all ${selectedPageIdx === idx ? 'border-blue-600 shadow-lg shadow-blue-500/20' : 'border-white/5 hover:border-white/10'}`}
-                        >
-                            <img src={p.imageUrl} className={`w-full h-full object-cover transition-all ${selectedPageIdx === idx ? 'opacity-100' : 'opacity-40 grayscale hover:opacity-100'}`} />
-                            <div className="absolute top-3 left-3 bg-black/80 px-2 py-1 rounded-lg text-[9px] font-black tracking-widest">{idx + 1}</div>
-                        </button>
-                    ))}
+                    <div className={`${isMobile ? 'flex flex-col w-48' : 'block'}`}>
+                        {pages.map((p, idx) => (
+                            <button
+                                key={p.id}
+                                onClick={() => { setSelectedPageIdx(idx); setActiveHotspot(null); if (isMobile) setShowThumbnails(false); }}
+                                className={`w-full relative aspect-[1/1.4] rounded-xl overflow-hidden border-2 transition-all mb-4 ${selectedPageIdx === idx ? 'border-blue-600 shadow-lg shadow-blue-500/20' : 'border-white/5 hover:border-white/10'}`}
+                            >
+                                <img src={p.imageUrl} className={`w-full h-full object-cover transition-all ${selectedPageIdx === idx ? 'opacity-100' : 'opacity-40 grayscale hover:opacity-100'}`} />
+                                <div className="absolute top-3 left-3 bg-black/80 px-2 py-1 rounded-lg text-[9px] font-black tracking-widest">{idx + 1}</div>
+                            </button>
+                        ))}
+                    </div>
                 </aside>
 
                 {/* Mapping Area */}
@@ -281,17 +310,17 @@ const EditionEditor = () => {
                         </TransformComponent>
                     </TransformWrapper>
 
-                    <div className="h-16 border-t border-white/5 bg-[#111827]/80 backdrop-blur-md flex items-center justify-between px-8">
-                        <div className="flex items-center gap-6">
-                            <MousePointer2 size={16} className="text-blue-500" />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 italic">Drag to map news region // Click existing to edit meta</span>
+                    <div className="h-16 border-t border-white/5 bg-[#111827]/80 backdrop-blur-md flex items-center justify-between px-4 md:px-8 shrink-0">
+                        <div className="flex items-center gap-3 md:gap-6">
+                            <MousePointer2 size={16} className="text-blue-500 shrink-0" />
+                            <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-gray-500 italic">Drag to map // Click to edit</span>
                         </div>
-                        <div className="flex items-center gap-6">
-                            <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 bg-blue-500 rounded-full" />
-                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{articles.length} Nodes Mapped</span>
+                        <div className="flex items-center gap-4 md:gap-6">
+                            <div className="flex items-center gap-1 md:gap-2">
+                                <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-blue-500 rounded-full" />
+                                <span className="text-[7px] md:text-[9px] font-black text-gray-400 uppercase tracking-widest">{articles.length} Nodes</span>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="hidden sm:flex items-center gap-2">
                                 <div className="w-2 h-2 bg-green-500 rounded-full" />
                                 <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{articles.filter(a => a.verified).length} Verified</span>
                             </div>
@@ -332,62 +361,71 @@ const EditionEditor = () => {
                     </div>
                 </aside>
 
-                {/* Side Editor */}
-                <aside className={`border-l border-white/5 bg-[#111827] transition-all duration-500 overflow-hidden ${!activeHotspot ? 'w-0' : 'w-[500px]'}`}>
+                {/* Side Editor / Bottom Sheet on Mobile */}
+                <aside className={`
+                    ${isMobile
+                        ? `fixed inset-x-0 bottom-0 z-[60] bg-[#111827] border-t border-white/10 rounded-t-[2rem] shadow-2xl transition-all duration-500 ${activeHotspot ? 'h-[85vh]' : 'h-0 pointer-events-none overflow-hidden'}`
+                        : `relative border-l border-white/5 bg-[#111827] transition-all duration-500 overflow-hidden ${!activeHotspot ? 'w-0' : 'w-[500px]'}`}
+                `}>
                     {activeHotspot && (
                         <div className="h-full flex flex-col">
-                            <div className="p-8 border-b border-white/5 flex items-center justify-between bg-black/20">
+                            {isMobile && (
+                                <div className="h-1.5 w-12 bg-white/20 rounded-full mx-auto my-4 shrink-0" onClick={() => setActiveHotspot(null)} />
+                            )}
+                            <div className={`p-4 md:p-8 border-b border-white/5 flex items-center justify-between bg-black/20 ${isMobile ? 'rounded-t-[2rem]' : ''}`}>
                                 <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-blue-600 rounded-lg"><Layers size={18} /></div>
-                                    <span className="text-xs font-black uppercase tracking-widest">Metadata Engine</span>
+                                    <div className="p-2 bg-blue-600 rounded-lg hidden md:block"><Layers size={18} /></div>
+                                    <span className="text-[10px] md:text-xs font-black uppercase tracking-widest">Metadata Engine</span>
                                 </div>
-                                <button onClick={handleCommitArticle} className="px-6 py-2.5 bg-white text-black rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all">Commit Node</button>
+                                <div className="flex items-center gap-3">
+                                    {isMobile && <button onClick={() => setActiveHotspot(null)} className="p-2.5 bg-white/5 rounded-xl text-gray-400"><X size={18} /></button>}
+                                    <button onClick={handleCommitArticle} className="px-4 md:px-6 py-2 md:py-2.5 bg-white text-black rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all">Commit Node</button>
+                                </div>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto p-10 space-y-10 custom-scrollbar">
+                            <div className="flex-1 overflow-y-auto p-6 md:p-10 space-y-6 md:space-y-10 custom-scrollbar pb-20">
                                 <div className="space-y-4">
-                                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">Precision Headline</label>
+                                    <label className="text-[9px] md:text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">Precision Headline</label>
                                     <textarea
                                         value={activeHotspot.headline}
                                         onChange={(e) => setActiveHotspot({ ...activeHotspot, headline: e.target.value })}
-                                        className="w-full h-28 px-5 py-4 bg-[#0B0F19] border border-white/5 rounded-2xl text-sm font-bold focus:border-blue-500 outline-none transition-all"
+                                        className="w-full h-20 md:h-28 px-4 md:px-5 py-3 md:py-4 bg-[#0B0F19] border border-white/5 rounded-xl md:rounded-2xl text-xs md:text-sm font-bold focus:border-blue-500 outline-none transition-all"
                                         placeholder="Article Headline..."
                                     />
                                 </div>
 
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between px-1">
-                                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest">Core Body (OCR Assisted)</label>
-                                        <button onClick={runOCR} disabled={ocrLoading} className="text-blue-500 text-[10px] font-bold uppercase tracking-widest hover:text-white flex items-center gap-2">
+                                        <label className="text-[9px] md:text-[10px] font-black text-gray-600 uppercase tracking-widest">Core Body</label>
+                                        <button onClick={runOCR} disabled={ocrLoading} className="text-blue-500 text-[9px] md:text-[10px] font-bold uppercase tracking-widest hover:text-white flex items-center gap-2">
                                             {ocrLoading ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                                            {ocrLoading ? 'Scanning...' : 'Run Intel OCR'}
+                                            {ocrLoading ? 'Scanning...' : 'Run OCR'}
                                         </button>
                                     </div>
                                     <textarea
                                         value={activeHotspot.content}
                                         onChange={(e) => setActiveHotspot({ ...activeHotspot, content: e.target.value })}
-                                        className="w-full h-80 px-5 py-4 bg-[#0B0F19] border border-white/5 rounded-[2rem] text-sm text-gray-400 leading-relaxed font-medium focus:border-blue-500 outline-none transition-all"
-                                        placeholder="Captured text stream..."
+                                        className="w-full h-48 md:h-80 px-4 md:px-5 py-3 md:py-4 bg-[#0B0F19] border border-white/5 rounded-2xl md:rounded-[2rem] text-xs md:text-sm text-gray-400 leading-relaxed font-bold focus:border-blue-500 outline-none transition-all"
+                                        placeholder="Captured text..."
                                     />
                                 </div>
 
-                                <div className="flex items-center justify-between p-6 bg-white/5 rounded-3xl border border-white/5">
+                                <div className="flex items-center justify-between p-4 md:p-6 bg-white/5 rounded-2xl md:rounded-3xl border border-white/5">
                                     <div className="flex items-center gap-3">
                                         <CheckCircle2 size={18} className={activeHotspot.verified ? 'text-green-500' : 'text-gray-600'} />
                                         <div>
-                                            <p className="text-[10px] font-black uppercase tracking-widest">Node Verification</p>
-                                            <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Approval for production</p>
+                                            <p className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-white">Verified</p>
                                         </div>
                                     </div>
                                     <button
                                         onClick={() => setActiveHotspot(prev => ({ ...prev, verified: !prev.verified }))}
-                                        className={`w-12 h-6 rounded-full relative transition-all ${activeHotspot.verified ? 'bg-green-600' : 'bg-gray-800'}`}
+                                        className={`w-10 h-5 md:w-12 md:h-6 rounded-full relative transition-all ${activeHotspot.verified ? 'bg-green-600' : 'bg-gray-800'}`}
                                     >
-                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${activeHotspot.verified ? 'left-7' : 'left-1'}`} />
+                                        <div className={`absolute top-0.5 md:top-1 w-4 h-4 bg-white rounded-full transition-all ${activeHotspot.verified ? 'left-5 md:left-7' : 'left-1'}`} />
                                     </button>
                                 </div>
 
-                                <button onClick={() => setActiveHotspot(null)} className="w-full py-4 text-gray-500 hover:text-red-500 text-[10px] font-black uppercase tracking-widest transition-all">Cancel Mapping</button>
+                                <button onClick={() => setActiveHotspot(null)} className="w-full py-2 text-gray-600 hover:text-red-500 text-[9px] font-black uppercase tracking-widest transition-all">Cancel</button>
                             </div>
                         </div>
                     )}

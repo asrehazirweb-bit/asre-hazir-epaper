@@ -43,6 +43,8 @@ import { deleteEditionCascade } from '../services/epaperService';
 
 const AdminLayout = ({ user, onBack }) => {
     const [collapsed, setCollapsed] = useState(false);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
     const [editions, setEditions] = useState([]);
     const [liveStats, setLiveStats] = useState({
         totalEditions: 0,
@@ -54,6 +56,17 @@ const AdminLayout = ({ user, onBack }) => {
     const [isConnected, setIsConnected] = useState(false);
     const location = useLocation();
     const navigate = useNavigate();
+
+    useEffect(() => {
+        const handleResize = () => {
+            const mobile = window.innerWidth < 1024;
+            setIsMobile(mobile);
+            if (mobile) setCollapsed(true);
+        };
+        window.addEventListener('resize', handleResize);
+        handleResize();
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     useEffect(() => {
         setLoading(true);
@@ -112,15 +125,33 @@ const AdminLayout = ({ user, onBack }) => {
     ];
 
     return (
-        <div className="flex h-screen bg-[#0B0F19] text-white overflow-hidden font-sans">
+        <div className="flex h-screen bg-[#0B0F19] text-white overflow-hidden font-sans relative">
+            {/* Mobile Sidebar Overlay */}
+            <AnimatePresence>
+                {isMobile && mobileMenuOpen && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
+                    />
+                )}
+            </AnimatePresence>
+
             {/* Sidebar Navigation */}
-            <aside className={`bg-[#111827] border-r border-white/5 transition-all duration-300 flex flex-col shrink-0 ${collapsed ? 'w-24' : 'w-72'}`}>
+            <aside className={`
+                ${isMobile
+                    ? `fixed inset-y-0 left-0 z-[101] w-72 transform transition-transform duration-300 shadow-2xl ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`
+                    : `relative flex flex-col shrink-0 transition-all duration-300 ${collapsed ? 'w-24' : 'w-72'}`}
+                bg-[#111827] border-r border-white/5
+            `}>
                 {/* Logo Section */}
-                <div className="h-24 flex items-center px-8 border-b border-white/5">
+                <div className="h-24 flex items-center px-8 border-b border-white/5 shrink-0">
                     <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 shrink-0">
                         <Newspaper size={20} className="text-white" />
                     </div>
-                    {!collapsed && (
+                    {(!collapsed || (isMobile && mobileMenuOpen)) && (
                         <div className="ml-4 animate-in fade-in slide-in-from-left-4">
                             <h1 className="text-sm font-black uppercase tracking-tighter italic leading-none">ASRE HAZIR</h1>
                             <p className="text-[9px] font-bold text-blue-500 uppercase tracking-widest mt-1">Admin Console</p>
@@ -129,11 +160,12 @@ const AdminLayout = ({ user, onBack }) => {
                 </div>
 
                 {/* Nav Links */}
-                <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+                <nav className="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
                     {navItems.map((item) => (
                         <NavLink
                             key={item.id}
                             to={item.path}
+                            onClick={() => isMobile && setMobileMenuOpen(false)}
                             className={({ isActive }) => `
                                 flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all group
                                 ${isActive
@@ -141,20 +173,20 @@ const AdminLayout = ({ user, onBack }) => {
                                     : 'text-gray-500 hover:bg-white/5 hover:text-white'}
                             `}
                         >
-                            <div className={`${collapsed ? 'mx-auto' : ''}`}>{item.icon}</div>
-                            {!collapsed && <span className="text-xs font-bold uppercase tracking-widest">{item.label}</span>}
+                            <div className={`${(collapsed && !isMobile) ? 'mx-auto' : ''}`}>{item.icon}</div>
+                            {(!collapsed || isMobile) && <span className="text-xs font-bold uppercase tracking-widest">{item.label}</span>}
                         </NavLink>
                     ))}
                 </nav>
 
                 {/* Bottom Actions */}
-                <div className="p-4 border-t border-white/5 bg-[#0B0F19]/50">
+                <div className="p-4 border-t border-white/5 bg-[#0B0F19]/50 shrink-0">
                     <button
                         onClick={handleLogout}
                         className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-red-500 hover:bg-red-500/10 transition-all font-bold uppercase tracking-widest text-[10px]"
                     >
-                        <LogOut size={20} className={collapsed ? 'mx-auto' : ''} />
-                        {!collapsed && <span>System Logout</span>}
+                        <LogOut size={20} className={(collapsed && !isMobile) ? 'mx-auto' : ''} />
+                        {(!collapsed || isMobile) && <span>System Logout</span>}
                     </button>
                 </div>
             </aside>
@@ -162,39 +194,39 @@ const AdminLayout = ({ user, onBack }) => {
             {/* Main Content Area */}
             <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
                 {/* Global Header */}
-                <header className="h-20 glass-panel border-b border-white/10 px-8 flex items-center justify-between z-40 relative">
-                    <div className="flex items-center gap-8">
+                <header className="h-20 glass-panel border-b border-white/10 px-4 md:px-8 flex items-center justify-between z-40 shrink-0">
+                    <div className="flex items-center gap-4 md:gap-8">
                         <button
-                            onClick={() => setCollapsed(!collapsed)}
+                            onClick={() => isMobile ? setMobileMenuOpen(true) : setCollapsed(!collapsed)}
                             className="p-2.5 hover:bg-white/5 rounded-xl transition-colors text-gray-500"
                         >
                             <Layout size={18} />
                         </button>
-                        <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-white/5 rounded-xl border border-white/5">
+                        <div className="hidden sm:flex items-center gap-3 px-4 py-2 bg-white/5 rounded-xl border border-white/5">
                             <Activity size={14} className={isConnected ? "text-green-500" : "text-red-500"} />
                             <span className="text-[10px] font-black uppercase tracking-widest">
-                                {isConnected ? "Live Engine Link" : "Link Interrupted"}
+                                {isConnected ? "Live Pulse" : "Signal Lost"}
                             </span>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3 md:gap-4">
                         <button
                             onClick={() => window.open('/', '_blank')}
-                            className="hidden lg:flex items-center gap-3 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-600/20 group"
+                            className="hidden xs:flex items-center gap-3 px-3 md:px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-600/20 group"
                         >
                             <ExternalLink size={14} className="group-hover:rotate-12 transition-transform" />
-                            View Live E-Paper Portal
+                            <span className="hidden md:inline">View Reader</span>
                         </button>
 
-                        <div className="h-8 w-px bg-white/10 mx-2" />
+                        <div className="h-8 w-px bg-white/10 mx-1 md:mx-2" />
 
-                        <div className="flex items-center gap-4 pl-2">
+                        <div className="flex items-center gap-3 md:gap-4 pl-1 md:pl-2">
                             <div className="text-right hidden sm:block">
-                                <p className="text-xs font-black text-white uppercase tracking-tight">{user?.displayName || 'System Admin'}</p>
-                                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest italic">{user?.email}</p>
+                                <p className="text-[10px] md:text-xs font-black text-white uppercase tracking-tight">{user?.displayName || 'Admin'}</p>
+                                <p className="text-[8px] md:text-[9px] font-bold text-gray-500 uppercase tracking-widest italic truncate max-w-[100px]">{user?.email}</p>
                             </div>
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 border border-white/20 flex items-center justify-center font-black italic shadow-inner">
+                            <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 border border-white/20 flex items-center justify-center font-black italic shadow-inner shrink-0">
                                 {user?.photoURL ? (
                                     <img src={user.photoURL} alt="" className="w-full h-full rounded-xl object-cover" />
                                 ) : (
@@ -207,7 +239,7 @@ const AdminLayout = ({ user, onBack }) => {
 
                 {/* Content Viewer */}
                 <div className="flex-1 overflow-y-auto bg-[#0B0F19] relative custom-scrollbar">
-                    <div className="max-w-[1600px] mx-auto p-10 h-full">
+                    <div className="max-w-[1600px] mx-auto p-4 md:p-10 h-full">
                         <Routes>
                             <Route index element={<Dashboard stats={liveStats} editions={editions} />} />
                             <Route path="dashboard" element={<Dashboard stats={liveStats} editions={editions} />} />
