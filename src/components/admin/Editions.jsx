@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Newspaper, Clock, Zap, Plus, Search, Edit2, Trash2, Eye, X, Battery, Settings2, Share2 } from 'lucide-react';
 import ImageUploader from '../ImageUploader';
 
-const Editions = ({ editions, onEdit, onDelete, searchQuery, setSearchQuery }) => {
+const Editions = ({ editions, onEdit, onDelete }) => {
     const [showUpload, setShowUpload] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
 
     return (
         <div className="space-y-8 pb-20">

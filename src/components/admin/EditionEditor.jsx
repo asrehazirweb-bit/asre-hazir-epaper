@@ -228,7 +228,13 @@ const EditionEditor = () => {
 
                 {/* Mapping Area */}
                 <main className="flex-1 relative bg-black overflow-hidden flex flex-col">
-                    <TransformWrapper centerOnInit minScale={1} limitToBounds={false} wheel={{ disabled: true }}>
+                    <TransformWrapper
+                        centerOnInit
+                        minScale={1}
+                        limitToBounds={false}
+                        panning={{ disabled: isDrawing || !!activeHotspot }}
+                        wheel={{ disabled: true }}
+                    >
                         <TransformComponent wrapperClassName="!w-full !h-full" contentClassName="flex items-center justify-center p-10">
                             <div
                                 ref={containerRef}
@@ -275,11 +281,56 @@ const EditionEditor = () => {
                         </TransformComponent>
                     </TransformWrapper>
 
-                    <div className="h-16 border-t border-white/5 bg-[#111827]/80 backdrop-blur-md flex items-center justify-center gap-6">
-                        <MousePointer2 size={16} className="text-blue-500" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 italic">Drag to map news region // Click existing to edit meta</span>
+                    <div className="h-16 border-t border-white/5 bg-[#111827]/80 backdrop-blur-md flex items-center justify-between px-8">
+                        <div className="flex items-center gap-6">
+                            <MousePointer2 size={16} className="text-blue-500" />
+                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 italic">Drag to map news region // Click existing to edit meta</span>
+                        </div>
+                        <div className="flex items-center gap-6">
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{articles.length} Nodes Mapped</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 bg-green-500 rounded-full" />
+                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{articles.filter(a => a.verified).length} Verified</span>
+                            </div>
+                        </div>
                     </div>
                 </main>
+
+                {/* Article List Shelf (Right Side when no active hotspot) */}
+                <aside className={`border-l border-white/5 bg-[#0B0F19] transition-all duration-500 overflow-hidden ${activeHotspot ? 'w-0' : 'w-80'}`}>
+                    <div className="h-full flex flex-col p-6 space-y-6">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-500">Page Inventory</h3>
+                            <Layers size={14} className="text-gray-700" />
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-2">
+                            {articles.length === 0 ? (
+                                <div className="h-40 flex flex-col items-center justify-center border border-dashed border-white/5 rounded-2xl">
+                                    <Sparkles size={24} className="text-gray-800 mb-3" />
+                                    <p className="text-[9px] font-black text-gray-700 uppercase tracking-widest">No articles found</p>
+                                </div>
+                            ) : (
+                                articles.map((art, idx) => (
+                                    <button
+                                        key={art.id}
+                                        onClick={() => setActiveHotspot(art)}
+                                        className="w-full p-4 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-blue-500/30 rounded-xl transition-all text-left group"
+                                    >
+                                        <div className="flex items-start justify-between mb-2">
+                                            <span className="text-[9px] font-black text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded">NODE {idx + 1}</span>
+                                            {art.verified && <CheckCircle size={10} className="text-green-500" />}
+                                        </div>
+                                        <p className="text-xs font-bold text-gray-300 line-clamp-2 leading-tight group-hover:text-white">{art.headline || 'Untitled Node'}</p>
+                                    </button>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </aside>
 
                 {/* Side Editor */}
                 <aside className={`border-l border-white/5 bg-[#111827] transition-all duration-500 overflow-hidden ${!activeHotspot ? 'w-0' : 'w-[500px]'}`}>

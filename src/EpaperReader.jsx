@@ -30,11 +30,24 @@ const EpaperReader = () => {
     // UI State
     const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+    const [showDatePicker, setShowDatePicker] = useState(false);
     const [error, setError] = useState(null);
 
     // Refs for Request Control
     const activeRequestRef = useRef(0);
     const timeoutRef = useRef(null);
+    const datePickerRef = useRef(null);
+
+    // Click outside handler for date picker
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (datePickerRef.current && !datePickerRef.current.contains(event.target)) {
+                setShowDatePicker(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     // Responsive Monitor
     useEffect(() => {
@@ -60,9 +73,6 @@ const EpaperReader = () => {
         const unsub = onSnapshot(q, (snapshot) => {
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setEditions(data);
-            if (data.length > 0 && !selectedDate) {
-                setSelectedDate(data[0].editionDate);
-            }
             setLoading(false);
         }, (err) => {
             console.error("Firestore Error:", err);
@@ -72,6 +82,13 @@ const EpaperReader = () => {
 
         return () => unsub();
     }, []);
+
+    // Set initial date only once
+    useEffect(() => {
+        if (editions.length > 0 && !selectedDate) {
+            setSelectedDate(editions[0].editionDate);
+        }
+    }, [editions, selectedDate]);
 
     // ATOMIC FEED SWITCHER
     const loadFeed = useCallback(async (date, editionId) => {
@@ -173,13 +190,21 @@ const EpaperReader = () => {
         if (hit) {
             setSelectedArticle({ ...hit, imageUrl: pageUrl });
         } else {
+            // 🧠 AI Discovery: Create a smart-crop for any arbitrary click (Like Hans India)
             setSelectedArticle({
-                id: 'discover-' + Date.now(),
-                headline: 'Digital Fragment captured',
-                content: 'No readable article found in this area. For high-fidelity reading, please click a verified news node.',
-                rect: { x: x - 15, y: y - 7.5, w: 30, h: 15 },
+                id: 'ai-discovery-' + Date.now(),
+                headline: 'Captured News Segment',
+                content: 'This area has not been indexed yet. Swipe to "Picture" view to see the original scan high-fidelity.',
+                // Create a 20% width/15% height centered box around the click
+                rect: {
+                    x: Math.max(0, x - 15),
+                    y: Math.max(0, y - 10),
+                    w: 30,
+                    h: 20
+                },
                 imageUrl: pageUrl,
-                verified: false
+                verified: false,
+                isDiscovery: true
             });
         }
     }, [articles]);
@@ -228,19 +253,66 @@ const EpaperReader = () => {
                         </div>
                     </div>
 
-                    <div className="hidden lg:flex items-center gap-3">
+                    <div className="hidden lg:flex items-center gap-6">
                         <div className="h-8 w-px bg-white/5 mx-2" />
-                        <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-xl border border-white/5">
-                            <Calendar size={14} className="text-blue-500" />
-                            <select
-                                value={selectedDate || ''}
-                                onChange={(e) => setSelectedDate(e.target.value)}
-                                className="bg-transparent text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer"
+
+                        {/* Premium Date Selector */}
+                        <div className="relative" ref={datePickerRef}>
+                            <div
+                                onClick={() => setShowDatePicker(!showDatePicker)}
+                                className={`flex items-center gap-3 bg-white/5 px-5 py-2.5 rounded-xl border transition-all cursor-pointer ${showDatePicker ? 'border-blue-500 bg-white/10' : 'border-white/5 hover:border-blue-500/30'}`}
                             >
-                                {editions.map(e => (
-                                    <option key={e.id} value={e.editionDate} className="bg-[#111827]">{e.editionDate}</option>
-                                ))}
-                            </select>
+                                <Calendar size={14} className="text-blue-500" />
+                                <span className="text-[10px] font-black uppercase tracking-widest">{selectedDate || 'Select Edition'}</span>
+                                <ChevronRight size={12} className="text-gray-600 rotate-90" />
+                            </div>
+
+                            <AnimatePresence>
+                                {showDatePicker && (
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                        className="absolute top-full left-0 mt-2 w-64 bg-[#111827] border border-white/10 rounded-2xl shadow-2xl z-[60] overflow-hidden"
+                                    >
+                                        <div className="p-4 border-b border-white/5 bg-black/20">
+                                            <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Available Archives</p>
+                                        </div>
+                                        <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                                            {editions.map(e => (
+                                                <button
+                                                    key={e.id}
+                                                    onClick={() => {
+                                                        setSelectedDate(e.editionDate);
+                                                        setShowDatePicker(false);
+                                                    }}
+                                                    className={`w-full px-5 py-4 text-left hover:bg-white/5 flex items-center justify-between border-b border-white/5 last:border-0 transition-colors ${selectedDate === e.editionDate ? 'bg-blue-600/10 text-blue-500' : 'text-gray-400'}`}
+                                                >
+                                                    <span className="text-[10px] font-black uppercase tracking-widest">{e.editionDate}</span>
+                                                    {selectedDate === e.editionDate && <Zap size={12} className="fill-blue-500" />}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+
+                        {/* Search Bar */}
+                        <div className="relative flex items-center">
+                            <Search className="absolute left-4 text-gray-600" size={14} />
+                            <input
+                                type="text"
+                                placeholder="Search Intel..."
+                                className="bg-white/5 border border-white/5 rounded-xl px-10 py-2.5 text-[10px] font-black uppercase tracking-widest outline-none focus:border-blue-500/50 focus:bg-white/10 transition-all w-64 placeholder:text-gray-700"
+                                onChange={(e) => {
+                                    const term = e.target.value.toLowerCase();
+                                    if (term.length > 2) {
+                                        const found = articles.find(a => a.headline?.toLowerCase().includes(term));
+                                        if (found) handleArticleClick(found);
+                                    }
+                                }}
+                            />
                         </div>
                     </div>
                 </div>
@@ -251,13 +323,9 @@ const EpaperReader = () => {
                             <Activity size={12} className="text-green-500" />
                             <span className="text-[9px] font-black text-green-500 uppercase tracking-widest">Live Sync</span>
                         </div>
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 rounded-lg">
-                            <Clock size={12} className="text-blue-500" />
-                            <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest">{new Date().toLocaleTimeString()}</span>
-                        </div>
                     </div>
-                    <button className="p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all">
-                        <User size={18} className="text-gray-400" />
+                    <button className="p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all text-gray-400 hover:text-white">
+                        <User size={18} />
                     </button>
                 </div>
             </header>

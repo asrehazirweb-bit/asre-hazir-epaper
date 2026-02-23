@@ -101,24 +101,30 @@ const PageViewer = memo(({ page, onArticleClick, onCoordinateClick }) => {
                             </div>
 
                             <TransformComponent
-                                wrapperClassName="!w-full !min-h-full"
-                                contentClassName="flex items-start justify-center py-4 lg:py-10"
+                                wrapperClassName="!w-full !h-full"
+                                contentClassName="flex items-center justify-center p-4 lg:p-10"
                             >
                                 <div
                                     ref={containerRef}
-                                    onClick={handleContainerClick}
-                                    className="relative shadow-[0_0_100px_rgba(0,0,0,0.8)] bg-white cursor-crosshair group touch-action-none"
+                                    onClick={(e) => {
+                                        // Standard click handler for the whole page
+                                        handleContainerClick(e);
+                                    }}
+                                    className="relative shadow-[0_0_100px_rgba(0,0,0,0.8)] bg-white cursor-pointer group"
                                 >
                                     <img
                                         src={page.imageUrl}
                                         alt="Main Newspaper Sheet"
                                         onLoad={handleImageLoad}
                                         onError={() => setImageLoaded(true)}
-                                        className={`max-w-none transition-opacity duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                                        className={`transition-opacity duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                                         style={{
                                             width: 'auto',
-                                            height: window.innerWidth < 768 ? '120vh' : '160vh',
-                                            pointerEvents: 'none'
+                                            height: 'auto',
+                                            maxWidth: '90vw',
+                                            maxHeight: '85vh',
+                                            pointerEvents: 'none',
+                                            display: 'block'
                                         }}
                                     />
 
@@ -126,7 +132,7 @@ const PageViewer = memo(({ page, onArticleClick, onCoordinateClick }) => {
                                     {imageLoaded && page.articles && page.articles.map((art) => (
                                         <div
                                             key={art.id}
-                                            className={`absolute border-2 border-transparent hover:border-blue-500/40 hover:bg-blue-500/5 cursor-pointer transition-all z-20 group/hotspot ${art.verified ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                                            className="absolute border border-blue-500/20 bg-blue-500/5 hover:border-blue-500 hover:bg-blue-500/20 cursor-pointer transition-all duration-200 z-[100] group/hotspot"
                                             title={art.headline}
                                             style={{
                                                 left: `${art.rect.x}%`,
@@ -136,12 +142,16 @@ const PageViewer = memo(({ page, onArticleClick, onCoordinateClick }) => {
                                             }}
                                             onClick={(e) => {
                                                 e.stopPropagation();
+                                                console.log("🔥 Article Clicked:", art.headline);
                                                 onArticleClick(art);
                                             }}
                                         >
-                                            <div className="absolute inset-x-0 -bottom-8 opacity-0 lg:group-hover/hotspot:opacity-100 flex justify-center transition-opacity">
-                                                <div className="px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded uppercase tracking-widest shadow-2xl border border-blue-400/50">
-                                                    Read Article
+                                            <div className="absolute inset-0 group-hover/hotspot:bg-blue-500/10 transition-colors duration-300" />
+
+                                            {/* Open Article Label */}
+                                            <div className="absolute -top-10 left-1/2 -translate-x-1/2 opacity-0 group-hover/hotspot:opacity-100 flex flex-col items-center transition-all duration-300 pointer-events-none">
+                                                <div className="px-3 py-1 bg-blue-600 text-white text-[8px] font-black rounded-lg uppercase tracking-widest shadow-xl whitespace-nowrap border border-blue-400">
+                                                    Open Article
                                                 </div>
                                             </div>
                                         </div>

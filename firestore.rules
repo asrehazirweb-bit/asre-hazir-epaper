@@ -18,7 +18,8 @@ service cloud.firestore {
     // 🗞️ EDITIONS, PAGES & ARTICLES (Public for Readers, Admin for Management)
     match /epaper_editions/{editionId} {
       allow read: if true; 
-      allow write: if isAdmin();
+      allow update: if (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readers'])) || isAdmin();
+      allow create, delete: if isAdmin();
     }
 
     match /epaper_pages/{pageId} {

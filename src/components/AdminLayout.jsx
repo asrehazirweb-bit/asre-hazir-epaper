@@ -39,6 +39,7 @@ import ImageUploader from './ImageUploader';
 import Dashboard from './admin/Dashboard';
 import Editions from './admin/Editions';
 import EditionEditor from './admin/EditionEditor';
+import { deleteEditionCascade } from '../services/epaperService';
 
 const AdminLayout = ({ user, onBack }) => {
     const [collapsed, setCollapsed] = useState(false);
@@ -90,11 +91,24 @@ const AdminLayout = ({ user, onBack }) => {
         onBack();
     };
 
+    const handleDeleteEdition = async (editionId) => {
+        if (window.confirm('🚨 Are you absolutely sure? This will delete the entire edition, all pages, and all article mappings. This action cannot be undone.')) {
+            try {
+                setLoading(true);
+                await deleteEditionCascade(editionId);
+                console.log('✅ Edition purged from system.');
+            } catch (err) {
+                console.error('Delete failed:', err);
+                alert('Deletion failed. Check console for details.');
+            } finally {
+                setLoading(false);
+            }
+        }
+    };
+
     const navItems = [
         { path: '/admin/dashboard', id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
         { path: '/admin/editions', id: 'editions', label: 'Editions', icon: <Newspaper size={20} /> },
-        { path: '/admin/news', id: 'news', label: 'Broadcast Desk', icon: <Zap size={20} /> },
-        { path: '/admin/settings', id: 'settings', label: 'Settings', icon: <SettingsIcon size={20} /> },
     ];
 
     return (
@@ -197,10 +211,14 @@ const AdminLayout = ({ user, onBack }) => {
                         <Routes>
                             <Route index element={<Dashboard stats={liveStats} editions={editions} />} />
                             <Route path="dashboard" element={<Dashboard stats={liveStats} editions={editions} />} />
-                            <Route path="editions" element={<Editions editions={editions} />} />
+                            <Route path="editions" element={
+                                <Editions
+                                    editions={editions}
+                                    onEdit={(id) => navigate(`/admin/editions/edit/${id}`)}
+                                    onDelete={handleDeleteEdition}
+                                />
+                            } />
                             <Route path="editions/edit/:id" element={<EditionEditor />} />
-                            <Route path="news" element={<div className="p-20 text-center italic text-gray-500">News CMS (Standardized Broadcast Desk) Coming Soon...</div>} />
-                            <Route path="settings" element={<div className="p-20 text-center italic text-gray-500">System Parameters Protected.</div>} />
                         </Routes>
                     </div>
                 </div>
