@@ -29,7 +29,7 @@ export const uploadImage = async (file, folder = 'epaper') => {
         }
 
         const data = await response.json();
-        return data.secure_url;
+        return data; // Return full data object instead of just secure_url
     } catch (error) {
         console.error('Error uploading image:', error);
         throw error;
