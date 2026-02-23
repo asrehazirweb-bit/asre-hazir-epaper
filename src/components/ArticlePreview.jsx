@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, ChevronLeft, ChevronRight, Share2, Type, Clock, Activity, Verified, Image as ImageIcon, Link } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Share2, Type, Clock, Activity, Verified, Image as ImageIcon, Link, Download } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const ArticlePreview = ({ article, onClose, onNext, onPrev }) => {
@@ -23,6 +23,26 @@ const ArticlePreview = ({ article, onClose, onNext, onPrev }) => {
     };
 
     const croppedImageUrl = getCropUrl(article.imageUrl, article.rect);
+
+    const handleDownload = async () => {
+        if (!croppedImageUrl) return;
+        try {
+            const response = await fetch(croppedImageUrl);
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `asre-hazir-article-${article.id.slice(0, 6)}.jpg`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Download failed:', error);
+            // Fallback: open in new tab
+            window.open(croppedImageUrl, '_blank');
+        }
+    };
 
     return (
         <motion.div
@@ -118,6 +138,9 @@ const ArticlePreview = ({ article, onClose, onNext, onPrev }) => {
             {/* Share & Branding */}
             <div className="px-10 py-6 bg-black border-t border-white/5 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3">
+                    <button onClick={handleDownload} className="p-3 bg-white/5 hover:bg-blue-600 hover:text-white rounded-xl transition-all border border-white/5 group" title="Download Image Clip">
+                        <Download size={16} className="text-blue-500 group-hover:text-white" />
+                    </button>
                     <button className="p-3 bg-white/5 hover:bg-[#25D366] hover:text-white rounded-xl transition-all border border-white/5 group">
                         <Share2 size={16} className="text-[#25D366] group-hover:text-white" />
                     </button>
@@ -127,7 +150,7 @@ const ArticlePreview = ({ article, onClose, onNext, onPrev }) => {
                     }} className="p-3 bg-white/5 hover:bg-blue-600 hover:text-white rounded-xl transition-all border border-white/5">
                         <Link size={16} className="text-blue-500" />
                     </button>
-                    <span className="text-[8px] font-black text-gray-700 uppercase tracking-[0.4em] ml-4 italic">Asre Hazir Digital Reader // System 5.0</span>
+                    <span className="text-[8px] font-black text-gray-700 uppercase tracking-[0.4em] ml-4 italic hidden sm:inline-block">Asre Hazir Digital Reader // System 5.0</span>
                 </div>
                 <div className="flex gap-2">
                     <div className="w-1.5 h-1.5 bg-blue-600 rounded-full" />
