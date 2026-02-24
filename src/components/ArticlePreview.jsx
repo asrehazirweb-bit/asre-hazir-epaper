@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { X, ChevronLeft, ChevronRight, Share2, Type, Clock, Activity, Verified, Image as ImageIcon, Link, Download } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Share2, Type, Clock, Activity, Verified, Image as ImageIcon, Link, Download, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const ArticlePreview = ({ article, onClose, onNext, onPrev }) => {

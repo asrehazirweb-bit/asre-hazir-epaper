@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Newspaper, Clock, Zap, Plus, Search, Edit2, Trash2, Eye, X, Battery, Settings2, Share2 } from 'lucide-react';
+import { Newspaper, Clock, Zap, Plus, Search, Edit2, Trash2, Eye, X, Battery, Settings2, Share2, FileText } from 'lucide-react';
 import ImageUploader from '../ImageUploader';
 
 const Editions = ({ editions, onEdit, onDelete }) => {

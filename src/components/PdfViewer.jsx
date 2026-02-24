@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, Maximize2, X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, FileText } from 'lucide-react';
+import { Download, X, FileText, ExternalLink, Minimize2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const PdfViewer = ({ fileUrl, title, onClose }) => {
@@ -17,68 +17,58 @@ const PdfViewer = ({ fileUrl, title, onClose }) => {
 
     return (
         <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-[#0B0F19] flex flex-col"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            className="w-full h-full flex flex-col bg-[#0B0F19] overflow-hidden"
         >
-            {/* Control Header */}
-            <header className="h-20 glass-panel border-b border-white/5 px-8 flex items-center justify-between shrink-0">
+            {/* Inline Control Header */}
+            <div className="h-14 bg-[#111827] border-b border-white/5 px-6 flex items-center justify-between z-10 shrink-0">
                 <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center shadow-lg shadow-red-500/20">
-                        <FileText size={20} className="text-white" />
+                    <div className="w-8 h-8 bg-red-600/10 rounded-lg flex items-center justify-center border border-red-500/20">
+                        <FileText size={16} className="text-red-500" />
                     </div>
                     <div>
-                        <h2 className="text-sm font-black italic uppercase tracking-tighter leading-none">{title}</h2>
-                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mt-1">Full PDF Edition Portfolio</p>
+                        <h2 className="text-[10px] font-black uppercase tracking-widest text-white leading-none truncate max-w-[200px]">{title}</h2>
+                        <p className="text-[8px] font-bold text-gray-500 uppercase tracking-[0.2em] mt-1">Full PDF Mode</p>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-3">
                     <button
                         onClick={handleDownload}
-                        className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-500/20"
+                        className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[9px] font-black uppercase tracking-widest transition-all"
                     >
-                        <Download size={14} />
-                        Download Full PDF
+                        <Download size={12} />
+                        Download
                     </button>
-                    <div className="w-px h-8 bg-white/5 mx-2" />
                     <button
-                        onClick={onClose}
-                        className="p-2.5 bg-white/5 hover:bg-red-500/10 text-gray-400 hover:text-red-500 rounded-xl transition-all"
+                        onClick={() => window.open(fileUrl, '_blank')}
+                        className="p-2 bg-white/5 hover:bg-white/10 text-gray-400 rounded-lg transition-all"
+                        title="Open in new tab"
                     >
-                        <X size={20} />
+                        <ExternalLink size={14} />
                     </button>
                 </div>
-            </header>
+            </div>
 
-            {/* PDF Content Area */}
-            <div className="flex-1 bg-black/40 relative overflow-hidden">
+            {/* Inline PDF Content Area */}
+            <div className="flex-1 bg-black/20 relative">
                 <iframe
                     src={`${fileUrl}#toolbar=1&navpanes=0&scrollbar=1`}
                     className="w-full h-full border-0"
                     title={title}
                 />
-
-                {/* Mobile Helper (only shows if iframe might be blocked or hard to use) */}
-                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 lg:hidden">
-                    <button
-                        onClick={() => window.open(fileUrl, '_blank')}
-                        className="px-8 py-4 bg-white/10 backdrop-blur-md border border-white/10 text-white rounded-2xl text-xs font-bold uppercase tracking-widest shadow-2xl"
-                    >
-                        Open In Native Viewer
-                    </button>
-                </div>
             </div>
 
-            {/* Bottom Footer Stats */}
-            <footer className="h-12 bg-black/40 border-t border-white/5 px-8 flex items-center justify-center gap-10">
+            {/* Mini Footer */}
+            <div className="h-8 bg-black/40 border-t border-white/5 px-6 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                    <span className="text-[8px] font-black text-gray-600 uppercase tracking-[0.3em]">SECURE PDF STREAM ACTIVE</span>
+                    <span className="text-[7px] font-black text-gray-600 uppercase tracking-widest">Digital Stream Secure</span>
                 </div>
-                <div className="text-[8px] font-black text-gray-700 uppercase tracking-[0.3em]">ASRE HAZIR DIGITAL // SYSTEM 5.0</div>
-            </footer>
+                <div className="text-[7px] font-black text-gray-700 uppercase tracking-widest">ASRE HAZIR V5.0</div>
+            </div>
         </motion.div>
     );
 };

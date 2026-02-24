@@ -25,6 +25,7 @@ const EpaperReader = () => {
     // Feed Lifecycle State
     const [feedStatus, setFeedStatus] = useState('idle'); // idle | loading | success | error
     const [selectedDate, setSelectedDate] = useState(null);
+    const [selectedEditionId, setSelectedEditionId] = useState(null);
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
     const [selectedArticle, setSelectedArticle] = useState(null);
 
@@ -89,6 +90,7 @@ const EpaperReader = () => {
     useEffect(() => {
         if (editions.length > 0 && !selectedDate) {
             setSelectedDate(editions[0].editionDate);
+            setSelectedEditionId(editions[0].id);
         }
     }, [editions, selectedDate]);
 
@@ -146,20 +148,29 @@ const EpaperReader = () => {
         }
     }, [feedStatus]);
 
-    // Handle Date Switch
+    // Handle Edition Switch
     useEffect(() => {
-        const edition = editions.find(e => e.editionDate === selectedDate);
+        const edition = selectedEditionId
+            ? editions.find(e => e.id === selectedEditionId)
+            : editions.find(e => e.editionDate === selectedDate);
+
         if (edition) {
+            // Update selectedDate if we just jumped to an editionId from search or something
+            if (edition.editionDate !== selectedDate) setSelectedDate(edition.editionDate);
+            if (edition.id !== selectedEditionId) setSelectedEditionId(edition.id);
+
             setSelectedArticle(null);
             if (edition.type === 'pdf') {
                 setShowPdfViewer(true);
+                setPages([]); // No pages collection for PDFs
                 setFeedStatus('success');
+                incrementReaders(edition.id);
             } else {
                 setShowPdfViewer(false);
-                loadFeed(selectedDate, edition.id);
+                loadFeed(edition.editionDate, edition.id);
             }
         }
-    }, [selectedDate, editions]);
+    }, [selectedDate, selectedEditionId, editions]);
 
     // Handle Page Navigation within same edition
     const handlePageNavigation = useCallback(async (index) => {
@@ -292,15 +303,17 @@ const EpaperReader = () => {
                                                     key={e.id}
                                                     onClick={() => {
                                                         setSelectedDate(e.editionDate);
+                                                        setSelectedEditionId(e.id);
                                                         setShowDatePicker(false);
                                                     }}
-                                                    className={`w-full px-5 py-4 text-left hover:bg-white/5 flex items-center justify-between border-b border-white/5 last:border-0 transition-colors ${selectedDate === e.editionDate ? 'bg-blue-600/10 text-blue-500' : 'text-gray-400'}`}
+                                                    className={`w-full px-5 py-4 text-left hover:bg-white/5 flex items-center justify-between border-b border-white/5 last:border-0 transition-colors ${selectedEditionId === e.id ? 'bg-blue-600/10 text-blue-500' : 'text-gray-400'}`}
                                                 >
                                                     <div className="flex flex-col">
-                                                        <span className="text-[10px] font-black uppercase tracking-widest">{e.editionDate}</span>
+                                                        <span className="text-[10px] font-black uppercase tracking-widest">{e.name || e.editionDate}</span>
+                                                        <span className="text-[7px] font-medium text-gray-500 mt-0.5">{e.editionDate}</span>
                                                         <span className={`text-[7px] font-black uppercase mt-1 ${e.type === 'pdf' ? 'text-red-500' : 'text-blue-500'}`}>{e.type === 'pdf' ? 'PDF Portfolio' : 'Interactive'}</span>
                                                     </div>
-                                                    {selectedDate === e.editionDate && <Zap size={12} className="fill-blue-500" />}
+                                                    {selectedEditionId === e.id && <Zap size={12} className="fill-blue-500" />}
                                                 </button>
                                             ))}
                                         </div>
@@ -350,10 +363,22 @@ const EpaperReader = () => {
                         : (leftPanelCollapsed ? 'w-0 overflow-hidden' : 'w-72 border-r')}`}
                 >
                     <PageThumbnailList
-                        pages={pages}
-                        activePageIndex={currentPageIndex}
+                        pages={pages.length > 0 ? pages : editions.filter(e => e.editionDate === selectedDate).map(e => ({
+                            id: e.id,
+                            isEdition: true,
+                            pageNumber: 1,
+                            imageUrl: e.thumbnailUrl || e.thumbnail,
+                            title: e.name,
+                            type: e.type
+                        }))}
+                        activePageIndex={pages.length > 0 ? currentPageIndex : editions.filter(e => e.editionDate === selectedDate).findIndex(e => e.id === selectedEditionId)}
                         onPageSelect={(idx) => {
-                            handlePageNavigation(idx);
+                            if (pages.length > 0) {
+                                handlePageNavigation(idx);
+                            } else {
+                                const sameDateEditions = editions.filter(e => e.editionDate === selectedDate);
+                                if (sameDateEditions[idx]) setSelectedEditionId(sameDateEditions[idx].id);
+                            }
                         }}
                         horizontal={isMobile}
                     />
@@ -363,11 +388,19 @@ const EpaperReader = () => {
                 <main className="flex-1 relative bg-black overflow-hidden flex flex-col">
                     <div className="flex-1 overflow-hidden relative">
                         {/* THE STABLE CANVAS - NEVER UNMOUNTS */}
-                        <PageViewer
-                            page={viewerPageData}
-                            onArticleClick={handleArticleClick}
-                            onCoordinateClick={handleCoordinateClick}
-                        />
+                        {!showPdfViewer ? (
+                            <PageViewer
+                                page={pages[currentPageIndex]}
+                                onArticleClick={handleArticleClick}
+                                onCoordinateClick={handleCoordinateClick}
+                            />
+                        ) : (
+                            <PdfViewer
+                                fileUrl={editions.find(e => e.id === selectedEditionId)?.fileUrl}
+                                title={editions.find(e => e.id === selectedEditionId)?.name}
+                                onClose={() => setShowPdfViewer(false)}
+                            />
+                        )}
 
                         {/* ATOMIC LOADER OVERLAY */}
                         <AnimatePresence>
@@ -504,19 +537,6 @@ const EpaperReader = () => {
                             />
                         </div>
                     </motion.div>
-                )}
-            </AnimatePresence>
-            {/* PDf Viewer Overlay */}
-            <AnimatePresence>
-                {showPdfViewer && (
-                    <PdfViewer
-                        fileUrl={editions.find(e => e.editionDate === selectedDate)?.fileUrl}
-                        title={editions.find(e => e.editionDate === selectedDate)?.name}
-                        onClose={() => {
-                            // Optionally switch back to interactive if available, or just keep it open
-                            setShowPdfViewer(false);
-                        }}
-                    />
                 )}
             </AnimatePresence>
         </div>
