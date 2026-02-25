@@ -53,12 +53,21 @@ const PdfViewer = ({ fileUrl, title, onClose }) => {
             </div>
 
             {/* Inline PDF Content Area */}
-            <div className="flex-1 bg-gray-50 relative">
+            <div className="flex-1 bg-[#2B2523] relative">
                 <iframe
-                    src={`${fileUrl}#toolbar=1&navpanes=0&scrollbar=1`}
+                    src={`https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`}
                     className="w-full h-full border-0"
                     title={title}
+                    onLoad={(e) => {
+                        // Optional: Hide loader or handle success
+                    }}
                 />
+
+                {/* Fallback for very slow connections */}
+                <div className="absolute inset-0 -z-10 flex flex-col items-center justify-center gap-4 text-white/20">
+                    <FileText size={48} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Bridging Digital Stream...</span>
+                </div>
             </div>
 
             {/* Mini Footer */}
