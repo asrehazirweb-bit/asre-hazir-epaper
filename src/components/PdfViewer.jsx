@@ -53,21 +53,35 @@ const PdfViewer = ({ fileUrl, title, onClose }) => {
             </div>
 
             {/* Inline PDF Content Area */}
-            <div className="flex-1 bg-[#2B2523] relative">
-                <iframe
-                    src={`https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`}
-                    className="w-full h-full border-0"
-                    title={title}
-                    onLoad={(e) => {
-                        // Optional: Hide loader or handle success
-                    }}
-                />
-
-                {/* Fallback for very slow connections */}
-                <div className="absolute inset-0 -z-10 flex flex-col items-center justify-center gap-4 text-white/20">
-                    <FileText size={48} />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Bridging Digital Stream...</span>
+            <div className="flex-1 bg-[#1A1817] relative flex flex-col items-center justify-center overflow-hidden">
+                {/* The "Bridge" UI - Shows while Google/Firebase negotiate the stream */}
+                <div className="absolute inset-x-12 top-1/2 -translate-y-1/2 text-center space-y-6">
+                    <div className="flex justify-center">
+                        <div className="w-16 h-16 bg-[#AA792D]/10 rounded-3xl flex items-center justify-center border border-[#AA792D]/20 animate-pulse">
+                            <FileText size={32} className="text-[#AA792D]" />
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <h3 className="text-[11px] font-black text-white/40 uppercase tracking-[0.4em]">Establishing Secure Bridge</h3>
+                        <p className="text-[8px] font-bold text-white/20 uppercase tracking-widest">Bridging Archives Node // {title}</p>
+                    </div>
+                    {/* Progress bar simulation */}
+                    <div className="max-w-[200px] mx-auto h-[1px] bg-white/5 overflow-hidden">
+                        <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: "100%" }}
+                            transition={{ duration: 3, repeat: Infinity }}
+                            className="h-full bg-[#AA792D]/40"
+                        />
+                    </div>
                 </div>
+
+                <iframe
+                    src={`https://docs.google.com/viewerng/viewer?url=${encodeURIComponent(fileUrl + "&f=.pdf")}&embedded=true`}
+                    className="w-full h-full border-0 relative z-10"
+                    title={title}
+                    style={{ background: 'transparent' }}
+                />
             </div>
 
             {/* Mini Footer */}
