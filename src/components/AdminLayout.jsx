@@ -40,6 +40,7 @@ import Dashboard from './admin/Dashboard';
 import Editions from './admin/Editions';
 import EditionEditor from './admin/EditionEditor';
 import { deleteEditionCascade } from '../services/epaperService';
+import ConfirmModal from './ConfirmModal';
 
 const AdminLayout = ({ user, onBack }) => {
     const [collapsed, setCollapsed] = useState(false);
@@ -54,6 +55,7 @@ const AdminLayout = ({ user, onBack }) => {
     });
     const [loading, setLoading] = useState(false);
     const [isConnected, setIsConnected] = useState(false);
+    const [confirmDeleteState, setConfirmDeleteState] = useState({ isOpen: false, editionId: null });
     const location = useLocation();
     const navigate = useNavigate();
 
@@ -104,18 +106,24 @@ const AdminLayout = ({ user, onBack }) => {
         onBack();
     };
 
-    const handleDeleteEdition = async (editionId) => {
-        if (window.confirm('🚨 Are you absolutely sure? This will delete the entire edition, all pages, and all article mappings. This action cannot be undone.')) {
-            try {
-                setLoading(true);
-                await deleteEditionCascade(editionId);
-                console.log('✅ Edition purged from system.');
-            } catch (err) {
-                console.error('Delete failed:', err);
-                alert('Deletion failed. Check console for details.');
-            } finally {
-                setLoading(false);
-            }
+    const handleDeleteEdition = (editionId) => {
+        setConfirmDeleteState({ isOpen: true, editionId });
+    };
+
+    const confirmPurge = async () => {
+        const editionId = confirmDeleteState.editionId;
+        if (!editionId) return;
+
+        try {
+            setLoading(true);
+            await deleteEditionCascade(editionId);
+            console.log('✅ Edition purged from system.');
+        } catch (err) {
+            console.error('Delete failed:', err);
+            alert('Deletion failed. Check console for details.');
+        } finally {
+            setLoading(false);
+            setConfirmDeleteState({ isOpen: false, editionId: null });
         }
     };
 
@@ -255,6 +263,17 @@ const AdminLayout = ({ user, onBack }) => {
                     </div>
                 </div>
             </main>
+
+            {/* Premium Confirm Modal */}
+            <ConfirmModal
+                isOpen={confirmDeleteState.isOpen}
+                onClose={() => setConfirmDeleteState({ isOpen: false, editionId: null })}
+                onConfirm={confirmPurge}
+                title="Critical Deletion Sync"
+                message="Are you absolutely sure? This will purge the entire edition, all synchronized pages, and all article mappings from the cloud node. This action cannot be reversed."
+                confirmText="Execute Purge"
+                type="danger"
+            />
         </div>
     );
 };

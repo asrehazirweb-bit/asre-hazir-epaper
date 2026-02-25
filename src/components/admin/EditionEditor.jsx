@@ -10,7 +10,8 @@ import {
 } from 'lucide-react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { performOCR } from '../../utils/ocrService';
-import { getPagesByEdition, getArticlesByPage, saveArticle, saveEdition } from '../../services/epaperService';
+import { getPagesByEdition, getArticlesByPage, saveArticle, saveEdition, deleteArticle } from '../../services/epaperService';
+import ConfirmModal from '../ConfirmModal';
 
 const EditionEditor = () => {
     const { id } = useParams();
@@ -27,6 +28,7 @@ const EditionEditor = () => {
     const [ocrLoading, setOcrLoading] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
     const [showThumbnails, setShowThumbnails] = useState(window.innerWidth >= 1024);
+    const [confirmDelete, setConfirmDelete] = useState(false);
 
     const imageRef = useRef(null);
     const containerRef = useRef(null);
@@ -401,13 +403,9 @@ const EditionEditor = () => {
 
                         <div className="p-8 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-4">
                             <button
-                                onClick={async () => {
+                                onClick={() => {
                                     if (activeHotspot.id) {
-                                        // Delete logic...
-                                        if (window.confirm('Purge this mapping from system?')) {
-                                            // Call delete service
-                                            setActiveHotspot(null);
-                                        }
+                                        setConfirmDelete(true);
                                     } else {
                                         setActiveHotspot(null);
                                     }
@@ -426,6 +424,24 @@ const EditionEditor = () => {
                     </aside>
                 )}
             </div>
+
+            <ConfirmModal
+                isOpen={confirmDelete}
+                onClose={() => setConfirmDelete(false)}
+                onConfirm={async () => {
+                    try {
+                        await deleteArticle(activeHotspot.id);
+                        setArticles(prev => prev.filter(a => a.id !== activeHotspot.id));
+                        setActiveHotspot(null);
+                    } catch (err) {
+                        console.error("Delete failed:", err);
+                    }
+                }}
+                title="Purge Mapping Request"
+                message="Are you sure you want to permanently delete this article coordinate mapping? This cannot be undone."
+                confirmText="Confirm Purge"
+                type="danger"
+            />
         </div>
     );
 };

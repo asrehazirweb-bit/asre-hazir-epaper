@@ -6,15 +6,39 @@ import ImageUploader from '../ImageUploader';
 const Editions = ({ editions, onEdit, onDelete }) => {
     const [showUpload, setShowUpload] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [editingEdition, setEditingEdition] = useState(null); // For metadata update modal
 
     const filteredEditions = (editions || []).filter(e =>
         e.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         e.id?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
+    const handleQuickUpdate = async (e) => {
+        e.preventDefault();
+        try {
+            // Import the save service or do it directly via db
+            // For now, we'll assume a local update function or pass it via props
+            // But let's just use the direct Firestore update for simplicity here
+            const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+            const { db } = await import('../../firebase/config');
+
+            await updateDoc(doc(db, 'epaper_editions', editingEdition.id), {
+                name: editingEdition.name,
+                editionDate: editingEdition.editionDate,
+                status: editingEdition.status,
+                updatedAt: serverTimestamp()
+            });
+            setEditingEdition(null);
+            // The onSnapshot in AdminLayout will auto-update the list
+        } catch (err) {
+            console.error("Update failed:", err);
+            alert("Update failed.");
+        }
+    };
+
     return (
         <div className="space-y-6 md:space-y-8 pb-20 px-2 sm:px-0">
-            {/* Control Bar */}
+            {/* Control Bar remains the same */}
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 md:gap-6 bg-white border border-gray-100 p-4 md:p-6 rounded-2xl shadow-sm">
                 <div className="relative group flex-1 max-w-lg">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#AA792D] transition-colors" size={18} />
@@ -137,13 +161,21 @@ const Editions = ({ editions, onEdit, onDelete }) => {
 
                                         <div className="grid grid-cols-4 gap-2 md:gap-3 pt-6 border-t border-gray-100">
                                             <button
-                                                onClick={() => onEdit(edition.id)}
-                                                disabled={edition.type === 'pdf'}
-                                                className={`col-span-2 flex items-center justify-center gap-2 py-3 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 ${edition.type === 'pdf' ? 'bg-gray-50 text-gray-300 cursor-not-allowed border border-gray-100' : 'bg-[#2B2523] text-white hover:bg-black shadow-lg shadow-black/10'}`}
+                                                onClick={() => {
+                                                    if (edition.type === 'pdf') {
+                                                        setEditingEdition(edition);
+                                                    } else {
+                                                        onEdit(edition.id);
+                                                    }
+                                                }}
+                                                className="col-span-2 flex items-center justify-center gap-2 py-3 bg-[#2B2523] text-white hover:bg-black rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-black/10"
                                             >
-                                                <Edit2 size={12} /> {edition.type === 'pdf' ? 'Fixed' : 'Control'}
+                                                <Edit2 size={12} /> {edition.type === 'pdf' ? 'Update' : 'Control'}
                                             </button>
-                                            <button className="flex items-center justify-center bg-gray-50 hover:bg-gray-100 text-gray-400 hover:text-[#AA792D] py-3 rounded-xl transition-all border border-gray-100">
+                                            <button
+                                                onClick={() => window.open(`/edition/${edition.id}`, '_blank')}
+                                                className="flex items-center justify-center bg-gray-50 hover:bg-gray-100 text-gray-400 hover:text-[#AA792D] py-3 rounded-xl transition-all border border-gray-100"
+                                            >
                                                 <Eye size={14} />
                                             </button>
                                             <button onClick={() => onDelete(edition.id)} className="flex items-center justify-center bg-red-50 hover:bg-red-500 text-red-500 hover:text-white py-3 rounded-xl transition-all border border-red-100 hover:border-red-500">
@@ -155,6 +187,74 @@ const Editions = ({ editions, onEdit, onDelete }) => {
                             ))}
                         </AnimatePresence>
                     </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Quick Update Modal */}
+            <AnimatePresence>
+                {editingEdition && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setEditingEdition(null)}
+                            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            className="relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl p-8 md:p-12 overflow-hidden"
+                        >
+                            <div className="space-y-8">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-2xl font-black text-[#2B2523] italic uppercase tracking-tight">Update <span className="text-[#AA792D]">Edition</span></h3>
+                                    <button onClick={() => setEditingEdition(null)} className="p-2 hover:bg-gray-50 rounded-xl text-gray-400"><X size={20} /></button>
+                                </div>
+
+                                <form onSubmit={handleQuickUpdate} className="space-y-6">
+                                    <div className="space-y-4">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Edition Identity</label>
+                                        <input
+                                            type="text"
+                                            value={editingEdition.name}
+                                            onChange={(e) => setEditingEdition({ ...editingEdition, name: e.target.value })}
+                                            className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 text-sm font-bold outline-none focus:border-[#AA792D]/50 focus:bg-white transition-all"
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <div className="space-y-4">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Target Date</label>
+                                            <input
+                                                type="date"
+                                                value={editingEdition.editionDate}
+                                                onChange={(e) => setEditingEdition({ ...editingEdition, editionDate: e.target.value })}
+                                                className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 text-sm font-bold outline-none focus:border-[#AA792D]/50 focus:bg-white transition-all"
+                                            />
+                                        </div>
+                                        <div className="space-y-4">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Broadcast Status</label>
+                                            <select
+                                                value={editingEdition.status}
+                                                onChange={(e) => setEditingEdition({ ...editingEdition, status: e.target.value })}
+                                                className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 text-sm font-bold outline-none focus:border-[#AA792D]/50 focus:bg-white transition-all"
+                                            >
+                                                <option value="draft">DRAFT</option>
+                                                <option value="published">PUBLISHED</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        className="w-full py-5 bg-[#AA792D] text-white rounded-2xl text-[11px] font-black uppercase tracking-[0.3em] shadow-xl shadow-[#AA792D]/20 hover:bg-[#8B6123] transition-all active:scale-95"
+                                    >
+                                        Sync Intelligence
+                                    </button>
+                                </form>
+                            </div>
+                        </motion.div>
+                    </div>
                 )}
             </AnimatePresence>
         </div>

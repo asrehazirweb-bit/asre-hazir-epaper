@@ -195,7 +195,7 @@ export const incrementReaders = async (editionId) => {
             lastSync: serverTimestamp()
         });
     } catch (error) {
-        console.error('❌ Error incrementing readers:', error);
+        // Silently fail for public selection to keep console clean
     }
 };
 
@@ -216,4 +216,16 @@ export const deleteEditionCascade = async (editionId) => {
 
     // Delete edition
     await deleteDoc(doc(db, EDITIONS_COLL, editionId));
+};
+
+/**
+ * Delete individual article mapping
+ */
+export const deleteArticle = async (articleId) => {
+    try {
+        await deleteDoc(doc(db, ARTICLES_COLL, articleId));
+    } catch (error) {
+        console.error('❌ Error deleting article:', error);
+        throw error;
+    }
 };

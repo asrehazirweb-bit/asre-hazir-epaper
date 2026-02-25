@@ -7,10 +7,13 @@ import PageThumbnailList from './components/PageThumbnailList';
 import PageViewer from './components/PageViewer';
 import ArticlePreview from './components/ArticlePreview';
 import PdfViewer from './components/PdfViewer';
+import EditionFeed from './components/EditionFeed';
+import NewspaperStream from './components/NewspaperStream';
+import DocumentSidebar from './components/DocumentSidebar';
 import {
     Loader2, Calendar, Globe, Newspaper, ChevronLeft, ChevronRight,
     Maximize2, Sidebar, PanelsTopLeft, Search, User, LogIn,
-    Zap, Activity, Clock, AlertTriangle
+    Zap, Activity, Clock, AlertTriangle, Home, Menu, X
 } from 'lucide-react';
 import { getPagesByEdition, getArticlesByPage, incrementReaders } from './services/epaperService';
 
@@ -88,11 +91,11 @@ const EpaperReader = () => {
         return () => unsub();
     }, []);
 
-    // Set initial date only once
+    // Landing logic: DEFAULT TO FEED (No auto-selection for control)
     useEffect(() => {
         if (editions.length > 0 && !selectedDate) {
             setSelectedDate(editions[0].editionDate);
-            setSelectedEditionId(editions[0].id);
+            // We EXPLICITLY do NOT set selectedEditionId here to force landing on the document cards feed
         }
     }, [editions, selectedDate]);
 
@@ -150,29 +153,49 @@ const EpaperReader = () => {
         }
     }, [feedStatus]);
 
-    // Handle Edition Switch
+    // Track incremented editions to prevent infinite loops
+    const incrementedRef = useRef(new Set());
+    // Track last selected ID to only auto-collapse on actual change
+    const lastIdRef = useRef(null);
+
+    // Handle Edition Switch - Separate core logic from reactive increment
     useEffect(() => {
-        const edition = selectedEditionId
-            ? editions.find(e => e.id === selectedEditionId)
-            : editions.find(e => e.editionDate === selectedDate);
-
-        if (edition) {
-            // Update selectedDate if we just jumped to an editionId from search or something
-            if (edition.editionDate !== selectedDate) setSelectedDate(edition.editionDate);
-            if (edition.id !== selectedEditionId) setSelectedEditionId(edition.id);
-
-            setSelectedArticle(null);
-            if (edition.type === 'pdf') {
-                setShowPdfViewer(true);
-                setPages([]); // No pages collection for PDFs
-                setFeedStatus('success');
-                incrementReaders(edition.id);
-            } else {
-                setShowPdfViewer(false);
-                loadFeed(edition.editionDate, edition.id);
-            }
+        if (!selectedEditionId) {
+            lastIdRef.current = null;
+            return;
         }
-    }, [selectedDate, selectedEditionId, editions]);
+
+        const edition = editions.find(e => e.id === selectedEditionId);
+        if (!edition) return;
+
+        // 1. Static Metadata Sync
+        if (edition.editionDate !== selectedDate) setSelectedDate(edition.editionDate);
+        setSelectedArticle(null);
+
+        // 2. Load Content
+        if (edition.type === 'pdf') {
+            setShowPdfViewer(true);
+            setPages([]);
+            setFeedStatus('success');
+        } else {
+            setShowPdfViewer(false);
+            loadFeed(edition.editionDate, edition.id);
+        }
+
+        // 3. Reader Increment (One-time per selection session)
+        if (!incrementedRef.current.has(selectedEditionId)) {
+            incrementedRef.current.add(selectedEditionId);
+            // Non-blocking increment call
+            incrementReaders(selectedEditionId).catch(() => { });
+        }
+
+        // 4. Auto-collapse sidebar ONLY on NEW selection for mobile
+        if (isMobile && lastIdRef.current !== selectedEditionId) {
+            setLeftPanelCollapsed(true);
+            lastIdRef.current = selectedEditionId;
+        }
+
+    }, [selectedEditionId, editions, isMobile]);
 
     // Handle Page Navigation within same edition
     const handlePageNavigation = useCallback(async (index) => {
@@ -264,15 +287,23 @@ const EpaperReader = () => {
             {/* Header */}
             <header className="h-20 bg-white border-b border-gray-100 px-8 flex items-center justify-between z-50 shrink-0 shadow-sm">
                 <div className="flex items-center gap-10">
-                    <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-[#AA792D] rounded-xl flex items-center justify-center shadow-lg shadow-[#AA792D]/20">
+                    <button
+                        onClick={() => {
+                            setSelectedEditionId(null);
+                            setPages([]);
+                            setFeedStatus('idle');
+                            setLeftPanelCollapsed(false);
+                        }}
+                        className="flex items-center gap-4 group cursor-pointer text-left"
+                    >
+                        <div className="w-10 h-10 bg-[#AA792D] rounded-xl flex items-center justify-center shadow-lg shadow-[#AA792D]/20 group-hover:scale-110 transition-transform">
                             <Newspaper size={20} className="text-white" />
                         </div>
                         <div>
-                            <h1 className="text-sm font-black italic uppercase tracking-tighter leading-none">ASRE HAZIR <span className="text-[#AA792D]">DIGITAL</span></h1>
+                            <h1 className="text-sm font-black italic uppercase tracking-tighter leading-none group-hover:text-[#AA792D] transition-colors">ASRE HAZIR <span className="text-[#AA792D]">DIGITAL</span></h1>
                             <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Industrial E-Paper Feed</p>
                         </div>
-                    </div>
+                    </button>
 
                     <div className="hidden lg:flex items-center gap-6">
                         <div className="h-8 w-px bg-gray-100 mx-2" />
@@ -340,6 +371,35 @@ const EpaperReader = () => {
                                 }}
                             />
                         </div>
+
+                        <div className="h-8 w-px bg-gray-100 mx-2" />
+
+                        {selectedEditionId && (
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
+                                    className={`flex items-center gap-3 px-5 py-2.5 rounded-xl border transition-all shadow-sm active:scale-95 ${!leftPanelCollapsed ? 'bg-white border-[#AA792D] text-[#AA792D]' : 'bg-gray-50 border-gray-100 text-gray-400'}`}
+                                >
+                                    <Sidebar size={16} />
+                                    <span className="text-[10px] font-black uppercase tracking-widest leading-none">
+                                        {!leftPanelCollapsed ? 'Hide Sidebar' : 'Show Sidebar'}
+                                    </span>
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        setSelectedEditionId(null);
+                                        setPages([]);
+                                        setFeedStatus('idle');
+                                        setLeftPanelCollapsed(false);
+                                    }}
+                                    className="flex items-center gap-3 px-5 py-2.5 bg-[#2B2523] text-white rounded-xl hover:bg-[#AA792D] transition-all shadow-lg active:scale-95"
+                                >
+                                    <ChevronLeft size={16} />
+                                    <span className="text-[10px] font-black uppercase tracking-widest">Exit Reader</span>
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -360,51 +420,85 @@ const EpaperReader = () => {
             </header>
 
             {/* Main Workspace */}
-            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-white">
-                {/* Thumbnails Navigation */}
-                <aside className={`bg-[#F9FAFB] border-gray-100 transition-all duration-300 flex flex-col shrink-0 
-                    ${isMobile
-                        ? 'w-full h-auto border-b'
-                        : (leftPanelCollapsed ? 'w-0 overflow-hidden' : 'w-72 border-r')}`}
-                >
-                    <PageThumbnailList
-                        pages={pages.length > 0 ? pages : editions.filter(e => e.editionDate === selectedDate).map(e => ({
-                            id: e.id,
-                            isEdition: true,
-                            pageNumber: 1,
-                            imageUrl: e.thumbnailUrl || e.thumbnail,
-                            title: e.name,
-                            type: e.type
-                        }))}
-                        activePageIndex={pages.length > 0 ? currentPageIndex : editions.filter(e => e.editionDate === selectedDate).findIndex(e => e.id === selectedEditionId)}
-                        onPageSelect={(idx) => {
-                            if (pages.length > 0) {
-                                handlePageNavigation(idx);
-                            } else {
-                                const sameDateEditions = editions.filter(e => e.editionDate === selectedDate);
-                                if (sameDateEditions[idx]) setSelectedEditionId(sameDateEditions[idx].id);
-                            }
-                        }}
-                        horizontal={isMobile}
-                    />
-                </aside>
+            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-white relative">
+
+                {/* Document Sidebar Backdrop for Mobile */}
+                <AnimatePresence>
+                    {!leftPanelCollapsed && isMobile && selectedEditionId && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setLeftPanelCollapsed(true)}
+                            className="fixed inset-0 bg-[#2B2523]/60 backdrop-blur-sm z-30 lg:hidden"
+                        />
+                    )}
+                </AnimatePresence>
+
+                {/* Document Sidebar - Sidebar Library for Switching */}
+                {selectedEditionId ? (
+                    <aside className={`bg-white border-r border-gray-100 transition-all duration-300 flex flex-col shrink-0 z-40 
+                        ${isMobile
+                            ? `fixed inset-y-0 left-0 w-80 shadow-2xl transform ${leftPanelCollapsed ? '-translate-x-full' : 'translate-x-0'}`
+                            : (leftPanelCollapsed ? 'w-0 overflow-hidden' : 'w-80')}`}
+                    >
+                        <DocumentSidebar
+                            editions={editions}
+                            selectedEditionId={selectedEditionId}
+                            onClose={() => setLeftPanelCollapsed(true)}
+                            onSelect={(e) => {
+                                setSelectedEditionId(e.id);
+                                if (isMobile) {
+                                    setTimeout(() => setLeftPanelCollapsed(true), 300);
+                                }
+                            }}
+                        />
+                    </aside>
+                ) : null}
+
+                {/* Mobile Menu Toggle Bar - Only visible when an edition is selected */}
+                {isMobile && selectedEditionId ? (
+                    <div className="h-14 bg-white border-b border-gray-100 flex items-center justify-between px-6 z-30 shadow-sm shrink-0">
+                        <button
+                            onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
+                            className="p-2 bg-gray-50 rounded-xl text-[#AA792D]"
+                        >
+                            <Menu size={20} />
+                        </button>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Document Controls</span>
+                        <div className="w-10" />
+                    </div>
+                ) : null}
 
                 {/* Central Canvas Container */}
-                <main className="flex-1 relative bg-black overflow-hidden flex flex-col">
-                    <div className="flex-1 overflow-hidden relative">
-                        {/* THE STABLE CANVAS - NEVER UNMOUNTS */}
-                        {!showPdfViewer ? (
-                            <PageViewer
-                                page={pages[currentPageIndex]}
-                                onArticleClick={handleArticleClick}
-                                onCoordinateClick={handleCoordinateClick}
+                <main className="flex-1 relative bg-white overflow-hidden flex flex-col">
+                    <div className="flex-1 overflow-hidden relative flex flex-col">
+                        {!selectedEditionId ? (
+                            <EditionFeed
+                                editions={editions}
+                                selectedDate={selectedDate}
+                                onDateSelect={setSelectedDate}
+                                onSelect={(e) => {
+                                    setSelectedDate(e.editionDate);
+                                    setSelectedEditionId(e.id);
+                                }}
                             />
                         ) : (
-                            <PdfViewer
-                                fileUrl={editions.find(e => e.id === selectedEditionId)?.fileUrl}
-                                title={editions.find(e => e.id === selectedEditionId)?.name}
-                                onClose={() => setShowPdfViewer(false)}
-                            />
+                            <div className="flex-1 overflow-hidden relative">
+                                {showPdfViewer ? (
+                                    <PdfViewer
+                                        fileUrl={editions.find(e => e.id === selectedEditionId)?.fileUrl}
+                                        title={editions.find(e => e.id === selectedEditionId)?.name}
+                                        onClose={() => setShowPdfViewer(false)}
+                                    />
+                                ) : (
+                                    <NewspaperStream
+                                        pages={pages}
+                                        edition={editions.find(e => e.id === selectedEditionId)}
+                                        onPdfOpen={() => setShowPdfViewer(true)}
+                                    />
+                                )}
+                            </div>
                         )}
 
                         {/* ATOMIC LOADER OVERLAY */}
@@ -452,57 +546,7 @@ const EpaperReader = () => {
                         </AnimatePresence>
                     </div>
 
-                    {/* Navigation Rail (Desktop Only or refined for mobile) */}
-                    {!isMobile && (
-                        <div className="h-16 bg-[#111827]/80 backdrop-blur-xl border-t border-white/5 flex items-center justify-between px-8 z-20 shrink-0">
-                            <button
-                                onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
-                                className="p-2.5 hover:bg-white/5 rounded-xl text-gray-500 transition-colors"
-                            >
-                                <Sidebar size={20} />
-                            </button>
-
-                            <div className="flex items-center gap-4">
-                                <button
-                                    onClick={() => handlePageNavigation(Math.max(0, currentPageIndex - 1))}
-                                    disabled={currentPageIndex === 0 || feedStatus === 'loading'}
-                                    className="flex items-center gap-3 px-6 py-2 bg-white/5 hover:bg-white/10 disabled:opacity-20 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all"
-                                >
-                                    <ChevronLeft size={16} /> Previous
-                                </button>
-                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{currentPageIndex + 1} // {pages.length}</span>
-                                <button
-                                    onClick={() => handlePageNavigation(Math.min(pages.length - 1, currentPageIndex + 1))}
-                                    disabled={currentPageIndex === pages.length - 1 || feedStatus === 'loading'}
-                                    className="flex items-center gap-3 px-6 py-2 bg-white/5 hover:bg-white/10 disabled:opacity-20 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all"
-                                >
-                                    Next <ChevronRight size={16} />
-                                </button>
-                            </div>
-                            <div className="w-10" />
-                        </div>
-                    )}
                 </main>
-
-                {/* Desktop Article Panel */}
-                {!isMobile && (
-                    <aside className={`bg-[#0B0F19] border-l border-white/5 transition-all duration-500 overflow-hidden relative z-30 shrink-0 ${!selectedArticle ? 'w-0' : 'w-[550px]'}`}>
-                        {selectedArticle && (
-                            <ArticlePreview
-                                article={selectedArticle}
-                                onClose={() => setSelectedArticle(null)}
-                                onNext={() => {
-                                    const idx = articles.findIndex(a => a.id === selectedArticle.id);
-                                    if (idx < articles.length - 1) setSelectedArticle({ ...articles[idx + 1], imageUrl: pages[currentPageIndex]?.imageUrl });
-                                }}
-                                onPrev={() => {
-                                    const idx = articles.findIndex(a => a.id === selectedArticle.id);
-                                    if (idx > 0) setSelectedArticle({ ...articles[idx - 1], imageUrl: pages[currentPageIndex]?.imageUrl });
-                                }}
-                            />
-                        )}
-                    </aside>
-                )}
             </div>
 
             {/* Mobile Bottom Sheet (Article Reader) */}
