@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { db } from './firebase/config';
 import { collection, query, orderBy, getDocs, onSnapshot, where } from 'firebase/firestore';
 import PageThumbnailList from './components/PageThumbnailList';
@@ -16,6 +16,7 @@ import { getPagesByEdition, getArticlesByPage, incrementReaders } from './servic
 const FEED_TIMEOUT_MS = 8000; // 8 seconds fallback
 
 const EpaperReader = () => {
+    const navigate = useNavigate();
     // Infrastructure State
     const [editions, setEditions] = useState([]);
     const [pages, setPages] = useState([]);
@@ -258,32 +259,32 @@ const EpaperReader = () => {
     }
 
     return (
-        <div className="h-screen flex flex-col bg-[#0B0F19] text-white overflow-hidden font-sans">
+        <div className="h-screen flex flex-col bg-white text-[#2B2523] overflow-hidden font-sans">
             {/* Header */}
-            <header className="h-20 glass-panel border-b border-white/5 px-8 flex items-center justify-between z-50 shrink-0">
+            <header className="h-20 bg-white border-b border-gray-100 px-8 flex items-center justify-between z-50 shrink-0 shadow-sm">
                 <div className="flex items-center gap-10">
                     <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+                        <div className="w-10 h-10 bg-[#AA792D] rounded-xl flex items-center justify-center shadow-lg shadow-[#AA792D]/20">
                             <Newspaper size={20} className="text-white" />
                         </div>
                         <div>
-                            <h1 className="text-sm font-black italic uppercase tracking-tighter leading-none">ASRE HAZIR <span className="text-blue-500">DIGITAL</span></h1>
-                            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mt-1">Industrial E-Paper Feed</p>
+                            <h1 className="text-sm font-black italic uppercase tracking-tighter leading-none">ASRE HAZIR <span className="text-[#AA792D]">DIGITAL</span></h1>
+                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Industrial E-Paper Feed</p>
                         </div>
                     </div>
 
                     <div className="hidden lg:flex items-center gap-6">
-                        <div className="h-8 w-px bg-white/5 mx-2" />
+                        <div className="h-8 w-px bg-gray-100 mx-2" />
 
                         {/* Premium Date Selector */}
                         <div className="relative" ref={datePickerRef}>
                             <div
                                 onClick={() => setShowDatePicker(!showDatePicker)}
-                                className={`flex items-center gap-3 bg-white/5 px-5 py-2.5 rounded-xl border transition-all cursor-pointer ${showDatePicker ? 'border-blue-500 bg-white/10' : 'border-white/5 hover:border-blue-500/30'}`}
+                                className={`flex items-center gap-3 bg-gray-50 px-5 py-2.5 rounded-xl border transition-all cursor-pointer ${showDatePicker ? 'border-[#AA792D] bg-white shadow-md' : 'border-gray-100 hover:border-[#AA792D]/30'}`}
                             >
-                                <Calendar size={14} className="text-blue-500" />
-                                <span className="text-[10px] font-black uppercase tracking-widest">{selectedDate || 'Select Edition'}</span>
-                                <ChevronRight size={12} className="text-gray-600 rotate-90" />
+                                <Calendar size={14} className="text-[#AA792D]" />
+                                <span className="text-[10px] font-black uppercase tracking-widest text-[#2B2523]">{selectedDate || 'Select Edition'}</span>
+                                <ChevronRight size={12} className="text-gray-300 rotate-90" />
                             </div>
 
                             <AnimatePresence>
@@ -292,10 +293,10 @@ const EpaperReader = () => {
                                         initial={{ opacity: 0, scale: 0.95, y: 10 }}
                                         animate={{ opacity: 1, scale: 1, y: 0 }}
                                         exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                                        className="absolute top-full left-0 mt-2 w-72 bg-[#111827] border border-white/10 rounded-2xl shadow-2xl z-[60] overflow-hidden"
+                                        className="absolute top-full left-0 mt-2 w-72 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[60] overflow-hidden"
                                     >
-                                        <div className="p-4 border-b border-white/5 bg-black/20">
-                                            <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Available Archives</p>
+                                        <div className="p-4 border-b border-gray-50 bg-gray-50/50">
+                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Available Archives</p>
                                         </div>
                                         <div className="max-h-60 overflow-y-auto custom-scrollbar">
                                             {editions.map(e => (
@@ -306,14 +307,14 @@ const EpaperReader = () => {
                                                         setSelectedEditionId(e.id);
                                                         setShowDatePicker(false);
                                                     }}
-                                                    className={`w-full px-5 py-4 text-left hover:bg-white/5 flex items-center justify-between border-b border-white/5 last:border-0 transition-colors ${selectedEditionId === e.id ? 'bg-blue-600/10 text-blue-500' : 'text-gray-400'}`}
+                                                    className={`w-full px-5 py-4 text-left hover:bg-gray-50 flex items-center justify-between border-b border-gray-50 last:border-0 transition-colors ${selectedEditionId === e.id ? 'bg-[#AA792D]/5 text-[#AA792D]' : 'text-gray-600'}`}
                                                 >
                                                     <div className="flex flex-col">
-                                                        <span className="text-[10px] font-black uppercase tracking-widest">{e.name || e.editionDate}</span>
-                                                        <span className="text-[7px] font-medium text-gray-500 mt-0.5">{e.editionDate}</span>
-                                                        <span className={`text-[7px] font-black uppercase mt-1 ${e.type === 'pdf' ? 'text-red-500' : 'text-blue-500'}`}>{e.type === 'pdf' ? 'PDF Portfolio' : 'Interactive'}</span>
+                                                        <span className="text-[10px] font-black uppercase tracking-widest font-bold">{e.name || e.editionDate}</span>
+                                                        <span className="text-[7px] font-medium text-gray-400 mt-0.5">{e.editionDate}</span>
+                                                        <span className={`text-[7px] font-black uppercase mt-1 ${e.type === 'pdf' ? 'text-red-500' : 'text-[#AA792D]'}`}>{e.type === 'pdf' ? 'PDF Portfolio' : 'Interactive'}</span>
                                                     </div>
-                                                    {selectedEditionId === e.id && <Zap size={12} className="fill-blue-500" />}
+                                                    {selectedEditionId === e.id && <Zap size={12} className="fill-[#AA792D] text-[#AA792D]" />}
                                                 </button>
                                             ))}
                                         </div>
@@ -324,11 +325,11 @@ const EpaperReader = () => {
 
                         {/* Search Bar */}
                         <div className="relative flex items-center">
-                            <Search className="absolute left-4 text-gray-600" size={14} />
+                            <Search className="absolute left-4 text-gray-400" size={14} />
                             <input
                                 type="text"
                                 placeholder="Search Intel..."
-                                className="bg-white/5 border border-white/5 rounded-xl px-10 py-2.5 text-[10px] font-black uppercase tracking-widest outline-none focus:border-blue-500/50 focus:bg-white/10 transition-all w-64 placeholder:text-gray-700"
+                                className="bg-gray-50 border border-gray-100 rounded-xl px-10 py-2.5 text-[10px] font-black uppercase tracking-widest outline-none focus:border-[#AA792D]/50 focus:bg-white transition-all w-64 placeholder:text-gray-400 text-[#2B2523]"
                                 onChange={(e) => {
                                     const term = e.target.value.toLowerCase();
                                     if (term.length > 2) {
@@ -343,21 +344,24 @@ const EpaperReader = () => {
 
                 <div className="flex items-center gap-6">
                     <div className="hidden md:flex items-center gap-4">
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 rounded-lg">
-                            <Activity size={12} className="text-green-500" />
-                            <span className="text-[9px] font-black text-green-500 uppercase tracking-widest">Live Sync</span>
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-lg">
+                            <Activity size={12} className="text-green-600" />
+                            <span className="text-[9px] font-black text-green-600 uppercase tracking-widest">Live Sync</span>
                         </div>
                     </div>
-                    <button className="p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all text-gray-400 hover:text-white">
+                    <button
+                        onClick={() => navigate('/admin')}
+                        className="p-3 bg-gray-50 hover:bg-white hover:shadow-md rounded-xl border border-gray-100 transition-all text-gray-400 hover:text-[#AA792D]"
+                    >
                         <User size={18} />
                     </button>
                 </div>
             </header>
 
             {/* Main Workspace */}
-            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-white">
                 {/* Thumbnails Navigation */}
-                <aside className={`bg-[#111827] border-white/5 transition-all duration-300 flex flex-col shrink-0 
+                <aside className={`bg-[#F9FAFB] border-gray-100 transition-all duration-300 flex flex-col shrink-0 
                     ${isMobile
                         ? 'w-full h-auto border-b'
                         : (leftPanelCollapsed ? 'w-0 overflow-hidden' : 'w-72 border-r')}`}
@@ -413,14 +417,14 @@ const EpaperReader = () => {
                                 >
                                     <div className="text-center space-y-4">
                                         <div className="relative">
-                                            <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto" />
+                                            <Loader2 className="w-12 h-12 animate-spin text-[#AA792D] mx-auto" />
                                             <motion.div
-                                                animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
+                                                animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
                                                 transition={{ duration: 2, repeat: Infinity }}
-                                                className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full"
+                                                className="absolute inset-0 bg-[#AA792D]/10 blur-xl rounded-full"
                                             />
                                         </div>
-                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em] animate-pulse">Switching Feed State...</p>
+                                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em] animate-pulse">Switching Feed State...</p>
                                     </div>
                                 </motion.div>
                             )}
@@ -429,15 +433,15 @@ const EpaperReader = () => {
                                 <motion.div
                                     initial={{ opacity: 0, scale: 0.9 }}
                                     animate={{ opacity: 1, scale: 1 }}
-                                    className="absolute inset-0 flex items-center justify-center bg-[#0B0F19]/90 z-40 p-8"
+                                    className="absolute inset-0 flex items-center justify-center bg-white/90 z-40 p-8"
                                 >
                                     <div className="text-center space-y-6 max-w-sm">
                                         <AlertTriangle className="w-16 h-16 text-amber-500 mx-auto" />
-                                        <h2 className="text-lg font-black uppercase tracking-widest italic text-white">Signal Failure</h2>
+                                        <h2 className="text-lg font-black uppercase tracking-widest italic text-[#2B2523]">Signal Failure</h2>
                                         <p className="text-gray-500 text-xs font-medium leading-relaxed uppercase tracking-wider">{error || "Connection timed out."}</p>
                                         <button
                                             onClick={() => loadFeed(selectedDate, editions.find(e => e.editionDate === selectedDate)?.id)}
-                                            className="px-8 py-3 bg-white text-black rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-transform"
+                                            className="px-8 py-3 bg-[#AA792D] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-transform shadow-lg shadow-[#AA792D]/20"
                                         >
                                             Retry Digital Sync
                                         </button>

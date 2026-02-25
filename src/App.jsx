@@ -12,18 +12,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           {/* Reader with Login Link */}
-          <Route path="/" element={
-            <>
-              <EpaperReader />
-              <Link
-                to="/admin"
-                className="fixed bottom-4 right-4 z-50 rounded-full bg-gray-800 p-3 text-white shadow-lg opacity-50 hover:opacity-100 transition-opacity"
-                title="Admin Login"
-              >
-                <Lock size={16} />
-              </Link>
-            </>
-          } />
+          <Route path="/" element={<EpaperReader />} />
 
           {/* Login Screen (using AdminPanel's logic) */}
           <Route path="/login" element={<AdminPanel onBack={() => window.location.href = '/'} />} />
