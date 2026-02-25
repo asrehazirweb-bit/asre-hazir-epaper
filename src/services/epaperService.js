@@ -23,26 +23,37 @@ const ARTICLES_COLL = 'epaper_articles';
  */
 export const saveEdition = async (editionData) => {
     try {
-        const docData = {
-            name: editionData.name || `Edition ${editionData.editionDate}`,
-            editionDate: editionData.editionDate || new Date().toISOString().split('T')[0],
-            status: editionData.status || 'draft',
-            type: editionData.type || 'image', // 'image', 'pdf-images'
-            fileUrl: editionData.fileUrl || '',
-            pageCount: editionData.pageCount || 0,
-            thumbnailUrl: editionData.thumbnailUrl || editionData.thumbnail || '',
-            isActive: editionData.isActive !== undefined ? editionData.isActive : true,
-            createdAt: editionData.createdAt || serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            readers: editionData.readers || 0,
-            syncStatus: 'synced',
-            battery: 100
-        };
-
         if (editionData.id) {
-            await updateDoc(doc(db, EDITIONS_COLL, editionData.id), docData);
+            // PARTIAL UPDATE: Preserve existing fields like status/date if not provided
+            const updateFields = { ...editionData };
+            delete updateFields.id;
+
+            // Clean undefined items to prevent Firestore errors
+            Object.keys(updateFields).forEach(key => updateFields[key] === undefined && delete updateFields[key]);
+
+            updateFields.updatedAt = serverTimestamp();
+
+            const docRef = doc(db, EDITIONS_COLL, editionData.id);
+            await updateDoc(docRef, updateFields);
             return editionData.id;
         } else {
+            // FULL CREATION: Apply defaults for new nodes
+            const docData = {
+                name: editionData.name || `Edition ${editionData.editionDate}`,
+                editionDate: editionData.editionDate || new Date().toISOString().split('T')[0],
+                status: editionData.status || 'draft',
+                type: editionData.type || 'image',
+                fileUrl: editionData.fileUrl || '',
+                pageCount: editionData.pageCount || 0,
+                thumbnailUrl: editionData.thumbnailUrl || editionData.thumbnail || '',
+                isActive: editionData.isActive !== undefined ? editionData.isActive : true,
+                createdAt: editionData.createdAt || serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                readers: editionData.readers || 0,
+                syncStatus: 'synced',
+                battery: 100
+            };
+
             const result = await addDoc(collection(db, EDITIONS_COLL), docData);
             return result.id;
         }

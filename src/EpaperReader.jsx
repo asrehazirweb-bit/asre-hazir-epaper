@@ -89,11 +89,14 @@ const EpaperReader = () => {
         return () => unsub();
     }, []);
 
-    // Landing logic: DEFAULT TO FEED (No auto-selection for control)
+    // Landing logic: AUTO-SYNC to Latest Edition Date
     useEffect(() => {
-        if (editions.length > 0 && !selectedDate) {
-            setSelectedDate(editions[0].editionDate);
-            // We EXPLICITLY do NOT set selectedEditionId here to force landing on the document cards feed
+        if (editions.length > 0) {
+            // If no date selected, OR if the current selected date is no longer the latest 
+            // and we are still on the first load/idle state, sync to latest.
+            if (!selectedDate) {
+                setSelectedDate(editions[0].editionDate);
+            }
         }
     }, [editions, selectedDate]);
 
