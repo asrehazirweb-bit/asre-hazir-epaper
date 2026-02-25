@@ -27,8 +27,9 @@ export const saveEdition = async (editionData) => {
             name: editionData.name || `Edition ${editionData.editionDate}`,
             editionDate: editionData.editionDate || new Date().toISOString().split('T')[0],
             status: editionData.status || 'draft',
-            type: editionData.type || 'image', // 'image' or 'pdf'
-            fileUrl: editionData.fileUrl || '', // For PDF editions
+            type: editionData.type || 'image', // 'image', 'pdf-images'
+            fileUrl: editionData.fileUrl || '',
+            pageCount: editionData.pageCount || 0,
             thumbnailUrl: editionData.thumbnailUrl || editionData.thumbnail || '',
             isActive: editionData.isActive !== undefined ? editionData.isActive : true,
             createdAt: editionData.createdAt || serverTimestamp(),

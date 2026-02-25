@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { uploadToStorage } from '../services/storageService';
 import { saveEdition, addEpaperPage } from '../services/epaperService';
 import { Upload, X, Check, Image as ImageIcon, Loader2, FileText, Zap, Calendar, Type, AlertCircle } from 'lucide-react';
+const PDFJS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+const PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 const ImageUploader = ({ onUploadComplete }) => {
     const [file, setFile] = useState(null);
@@ -11,6 +13,7 @@ const ImageUploader = ({ onUploadComplete }) => {
 
     const [uploading, setUploading] = useState(false);
     const [progress, setProgress] = useState(0);
+    const [statusLabel, setStatusLabel] = useState('');
     const [error, setError] = useState(null);
 
     const [editionTitle, setEditionTitle] = useState('');
@@ -21,10 +24,10 @@ const ImageUploader = ({ onUploadComplete }) => {
         const selectedFile = e.target.files?.[0];
         if (selectedFile) {
             const isPdfFile = selectedFile.type === 'application/pdf';
-            const maxSize = isPdfFile ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
+            const maxSize = 100 * 1024 * 1024; // 100MB Limit
 
             if (selectedFile.size > maxSize) {
-                setError(`File too large! Maximum ${isPdfFile ? '50MB for PDFs' : '5MB for images'}.`);
+                setError(`File too large! Maximum 100MB.`);
                 return;
             }
 
@@ -52,6 +55,54 @@ const ImageUploader = ({ onUploadComplete }) => {
         }
     };
 
+    const processPdfConversion = async (pdfFile, editionId) => {
+        setStatusLabel('Initializing Conversion Engine...');
+        // Load PDF.js
+        if (!window.pdfjsLib) {
+            const script = document.createElement('script');
+            script.src = PDFJS_CDN;
+            document.head.appendChild(script);
+            await new Promise(r => script.onload = r);
+        }
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+
+        const arrayBuffer = await pdfFile.arrayBuffer();
+        const pdf = await window.pdfjsLib.getDocument(arrayBuffer).promise;
+        const totalPages = pdf.numPages;
+
+        const imageUrls = [];
+
+        for (let i = 1; i <= totalPages; i++) {
+            setStatusLabel(`Rendering & Syncing Page ${i} / ${totalPages}...`);
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 2.0 }); // High resolution for reading
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            await page.render({ canvasContext: context, viewport }).promise;
+
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+            const pageFile = new File([blob], `page_${i}.jpg`, { type: 'image/jpeg' });
+
+            const url = await uploadToStorage(pageFile, `epaper/editions/${editionId}`);
+            imageUrls.push(url);
+
+            // Create page record in Firestore
+            await addEpaperPage({
+                editionDate,
+                pageNumber: i,
+                imageUrl: url,
+                title: `Page ${i}`
+            });
+
+            setProgress(Math.round((i / totalPages) * 100));
+        }
+
+        return { imageUrls, totalPages };
+    };
+
     const handleUpload = async () => {
         if (!file) return;
         if (!editionTitle) {
@@ -59,43 +110,58 @@ const ImageUploader = ({ onUploadComplete }) => {
             return;
         }
 
-        if (isPdf && !thumbnail) {
-            setError('First Page Image is required for PDFs to show a preview!');
-            return;
-        }
-
         setUploading(true);
         setError(null);
         setProgress(0);
+        setStatusLabel('Securing Asset Node...');
 
         try {
             let fileUrl = '';
             let thumbnailUrl = '';
+            let pageCount = 0;
 
-            // 1. Upload Main Asset
-            const assetPath = isPdf ? 'epaper/pdfs' : 'epaper/images';
-            fileUrl = await uploadToStorage(file, assetPath, (p) => setProgress(Math.round(p * 0.9)));
+            if (isPdf) {
+                // 1. Upload original PDF to Storage (for download link)
+                setStatusLabel('Transmitting Master PDF...');
+                fileUrl = await uploadToStorage(file, 'epaper/pdfs', (p) => setProgress(p * 0.1));
 
-            // 2. Upload Thumbnail if exists
-            if (thumbnail) {
-                thumbnailUrl = await uploadToStorage(thumbnail, 'epaper/thumbnails');
-            } else if (!isPdf) {
-                thumbnailUrl = fileUrl; // For images, use the image itself as thumbnail
-            }
+                // 2. Create Edition Placeholder to get an ID or just use date-based
+                const editionId = await saveEdition({
+                    name: editionTitle,
+                    editionDate: editionDate,
+                    type: 'pdf-images',
+                    fileUrl: fileUrl,
+                    status: 'published',
+                    isActive: true
+                });
 
-            // 3. Create Edition
-            const editionId = await saveEdition({
-                name: editionTitle,
-                editionDate: editionDate,
-                type: isPdf ? 'pdf' : 'image',
-                fileUrl: fileUrl,
-                thumbnailUrl: thumbnailUrl,
-                status: 'published',
-                isActive: true
-            });
+                // 3. Automated Image Conversion & Storage Sync
+                const conversionResult = await processPdfConversion(file, editionId);
+                pageCount = conversionResult.totalPages;
+                thumbnailUrl = conversionResult.imageUrls[0]; // Use first page as thumb
 
-            // 4. If image, also add as Page 1 for legacy support in mapping
-            if (!isPdf) {
+                // 4. Update Edition with Final Data
+                await saveEdition({
+                    id: editionId,
+                    thumbnailUrl: thumbnailUrl,
+                    pageCount: pageCount
+                });
+            } else {
+                // Image Flow
+                fileUrl = await uploadToStorage(file, 'epaper/images', (p) => setProgress(p));
+                thumbnailUrl = thumbnail ? await uploadToStorage(thumbnail, 'epaper/thumbnails') : fileUrl;
+
+                await saveEdition({
+                    name: editionTitle,
+                    editionDate: editionDate,
+                    type: 'image',
+                    fileUrl: fileUrl,
+                    thumbnailUrl: thumbnailUrl,
+                    pageCount: 1,
+                    status: 'published',
+                    isActive: true
+                });
+
                 await addEpaperPage({
                     editionDate,
                     pageNumber: 1,
@@ -104,18 +170,14 @@ const ImageUploader = ({ onUploadComplete }) => {
                 });
             }
 
-            console.log('✅ Edition Deployed Successfully:', editionId);
+            setStatusLabel('Archive Published Successfully');
             if (onUploadComplete) onUploadComplete(fileUrl);
-
-            // Success State Reset
             setProgress(100);
-            setTimeout(() => {
-                handleClear();
-            }, 2000);
+            setTimeout(() => handleClear(), 2000);
 
         } catch (err) {
-            console.error('❌ Deployment Failed:', err);
-            setError(err.message || 'System fault during transmission.');
+            console.error('❌ Publication Fault:', err);
+            setError(err.message || 'Transmission Error in Blaze Cluster.');
         } finally {
             setUploading(false);
         }
@@ -177,15 +239,7 @@ const ImageUploader = ({ onUploadComplete }) => {
                 {/* Metadata & PDF Preview Required Section */}
                 {file && !uploading && (
                     <div className="space-y-6">
-                        {isPdf && !thumbnail && (
-                            <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-start gap-4 animate-in fade-in slide-in-from-top-2">
-                                <AlertCircle className="text-amber-600 shrink-0" size={20} />
-                                <div>
-                                    <p className="text-xs font-black text-amber-900 uppercase tracking-tight">Preview Required</p>
-                                    <p className="text-[10px] text-amber-700 font-medium mt-1 uppercase tracking-wide">Bhai, PDF ke liye First Page ki image upload karna zaroori hai taake readers preview dekh sakein.</p>
-                                </div>
-                            </div>
-                        )}
+
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-xl">
                             <div className="space-y-6">
@@ -214,23 +268,25 @@ const ImageUploader = ({ onUploadComplete }) => {
                                 </div>
                             </div>
 
-                            {/* Thumbnail Upload (Required for PDFs for Preview) */}
-                            <div className="space-y-2">
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
-                                    First Page Preview {isPdf && <span className="text-[#AA792D] font-black">(REQUIRED)</span>}
-                                </label>
-                                <label className={`w-full h-[154px] rounded-2xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all ${thumbPreview ? 'border-solid border-gray-200' : 'border-gray-100 hover:border-[#AA792D]/30 bg-gray-50'}`}>
-                                    {thumbPreview ? (
-                                        <img src={thumbPreview} alt="Thumb" className="w-full h-full object-cover rounded-2xl" />
-                                    ) : (
-                                        <>
-                                            <ImageIcon size={24} className="text-gray-300 mb-2 group-hover:text-[#AA792D]" />
-                                            <span className="text-[9px] font-black text-gray-400 uppercase group-hover:text-[#AA792D]">Upload Page 1 Image</span>
-                                        </>
-                                    )}
-                                    <input type="file" accept="image/*" onChange={handleThumbnailChange} className="hidden" />
-                                </label>
-                            </div>
+                            {/* Thumbnail Upload (Only for solo images) */}
+                            {!isPdf && (
+                                <div className="space-y-2">
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
+                                        Cover Image <span className="text-[#AA792D] font-black">(REQUIRED)</span>
+                                    </label>
+                                    <label className={`w-full h-[154px] rounded-2xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all ${thumbPreview ? 'border-solid border-gray-200' : 'border-gray-100 hover:border-[#AA792D]/30 bg-gray-50'}`}>
+                                        {thumbPreview ? (
+                                            <img src={thumbPreview} alt="Thumb" className="w-full h-full object-cover rounded-2xl" />
+                                        ) : (
+                                            <>
+                                                <ImageIcon size={24} className="text-gray-300 mb-2 group-hover:text-[#AA792D]" />
+                                                <span className="text-[9px] font-black text-gray-400 uppercase group-hover:text-[#AA792D]">Upload Cover Image</span>
+                                            </>
+                                        )}
+                                        <input type="file" accept="image/*" onChange={handleThumbnailChange} className="hidden" />
+                                    </label>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
@@ -239,7 +295,7 @@ const ImageUploader = ({ onUploadComplete }) => {
                 {uploading && (
                     <div className="space-y-4 bg-white p-8 rounded-[2rem] border border-gray-100 shadow-xl">
                         <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
-                            <span className="text-[#AA792D]">Transmitting to Cloud Cluster...</span>
+                            <span className="text-[#AA792D]">{statusLabel}</span>
                             <span className="text-[#2B2523]">{progress}%</span>
                         </div>
                         <div className="h-3 bg-gray-50 rounded-full overflow-hidden border border-gray-100">

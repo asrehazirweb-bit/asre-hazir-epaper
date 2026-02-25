@@ -6,7 +6,6 @@ import { collection, query, orderBy, getDocs, onSnapshot, where } from 'firebase
 import PageThumbnailList from './components/PageThumbnailList';
 import PageViewer from './components/PageViewer';
 import ArticlePreview from './components/ArticlePreview';
-import PdfViewer from './components/PdfViewer';
 import EditionFeed from './components/EditionFeed';
 import NewspaperStream from './components/NewspaperStream';
 import DocumentSidebar from './components/DocumentSidebar';
@@ -39,7 +38,6 @@ const EpaperReader = () => {
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [error, setError] = useState(null);
-    const [showPdfViewer, setShowPdfViewer] = useState(false);
 
     // Refs for Request Control
     const activeRequestRef = useRef(0);
@@ -173,14 +171,8 @@ const EpaperReader = () => {
         setSelectedArticle(null);
 
         // 2. Load Content
-        if (edition.type === 'pdf') {
-            setShowPdfViewer(true);
-            setPages([]);
-            setFeedStatus('success');
-        } else {
-            setShowPdfViewer(false);
-            loadFeed(edition.editionDate, edition.id);
-        }
+        // 2. Load Content - Now unified image-based feed
+        loadFeed(edition.editionDate, edition.id);
 
         // 3. Reader Increment (One-time per selection session)
         if (!incrementedRef.current.has(selectedEditionId)) {
@@ -485,19 +477,10 @@ const EpaperReader = () => {
                             />
                         ) : (
                             <div className="flex-1 overflow-hidden relative">
-                                {showPdfViewer ? (
-                                    <PdfViewer
-                                        fileUrl={editions.find(e => e.id === selectedEditionId)?.fileUrl}
-                                        title={editions.find(e => e.id === selectedEditionId)?.name}
-                                        onClose={() => setShowPdfViewer(false)}
-                                    />
-                                ) : (
-                                    <NewspaperStream
-                                        pages={pages}
-                                        edition={editions.find(e => e.id === selectedEditionId)}
-                                        onPdfOpen={() => setShowPdfViewer(true)}
-                                    />
-                                )}
+                                <NewspaperStream
+                                    pages={pages}
+                                    edition={editions.find(e => e.id === selectedEditionId)}
+                                />
                             </div>
                         )}
 
