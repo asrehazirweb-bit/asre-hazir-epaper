@@ -1,8 +1,8 @@
-const CACHE_NAME = 'asre-hazir-v2';
+const CACHE_NAME = 'asre-hazir-v3';
 const ASSETS = [
     '/index.html',
     '/manifest.json',
-    '/vite.svg'
+    '/logo.png'
 ];
 
 self.addEventListener('install', (event) => {
