@@ -28,6 +28,16 @@ export const saveEdition = async (editionData) => {
             const updateFields = { ...editionData };
             delete updateFields.id;
 
+            // AUTOMATIC VISIBILITY SYNC: Triggered when metadata updates status to published
+            if (updateFields.status === 'published') {
+                updateFields.isVisible = true;
+                if (!updateFields.publishedAt) updateFields.publishedAt = serverTimestamp();
+            }
+
+            // Sync thumbnail fields for cross-compatibility
+            if (updateFields.thumbnail && !updateFields.thumbnailUrl) updateFields.thumbnailUrl = updateFields.thumbnail;
+            if (updateFields.thumbnailUrl && !updateFields.thumbnail) updateFields.thumbnail = updateFields.thumbnailUrl;
+
             // Clean undefined items to prevent Firestore errors
             Object.keys(updateFields).forEach(key => updateFields[key] === undefined && delete updateFields[key]);
 
@@ -46,7 +56,10 @@ export const saveEdition = async (editionData) => {
                 fileUrl: editionData.fileUrl || '',
                 pageCount: editionData.pageCount || 0,
                 thumbnailUrl: editionData.thumbnailUrl || editionData.thumbnail || '',
+                thumbnail: editionData.thumbnail || editionData.thumbnailUrl || '',
                 isActive: editionData.isActive !== undefined ? editionData.isActive : true,
+                isVisible: editionData.status === 'published' ? true : (editionData.isVisible !== undefined ? editionData.isVisible : false),
+                publishedAt: editionData.status === 'published' ? serverTimestamp() : null,
                 createdAt: editionData.createdAt || serverTimestamp(),
                 updatedAt: serverTimestamp(),
                 readers: editionData.readers || 0,
@@ -130,8 +143,8 @@ export const getPublishedEditions = async () => {
     const q = query(
         collection(db, EDITIONS_COLL),
         where("status", "==", "published"),
-        where("isActive", "==", true),
-        orderBy('editionDate', 'desc')
+        where("isVisible", "==", true),
+        orderBy('publishedAt', 'desc')
     );
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -175,9 +188,21 @@ export const addEpaperPage = async (pageData) => {
     if (!snapshot.empty) {
         editionId = snapshot.docs[0].id;
         // Force update existing edition to published/active when a new page is uploaded
-        await updateDoc(doc(db, EDITIONS_COLL, editionId), { status: 'published', isActive: true, updatedAt: serverTimestamp() });
+        await updateDoc(doc(db, EDITIONS_COLL, editionId), {
+            status: 'published',
+            isVisible: true,
+            isActive: true,
+            publishedAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+        });
     } else {
-        editionId = await saveEdition({ editionDate: pageData.editionDate, status: 'published', isActive: true });
+        editionId = await saveEdition({
+            editionDate: pageData.editionDate,
+            status: 'published',
+            isVisible: true,
+            isActive: true,
+            publishedAt: serverTimestamp()
+        });
     }
 
     // 2. Save page

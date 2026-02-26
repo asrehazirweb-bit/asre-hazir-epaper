@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { uploadToStorage } from '../services/storageService';
-import { saveEdition, addEpaperPage } from '../services/epaperService';
+import { serverTimestamp } from 'firebase/firestore';
+import { saveEdition, savePage } from '../services/epaperService';
 import { Upload, X, Check, Image as ImageIcon, Loader2, FileText, Zap, Calendar, Type, AlertCircle } from 'lucide-react';
 const PDFJS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
 const PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -64,8 +65,9 @@ const ImageUploader = ({ onUploadComplete }) => {
             const url = await uploadToStorage(pageFile, `epaper/editions/${editionId}`);
             imageUrls.push(url);
 
-            await addEpaperPage({
-                editionDate,
+            // SAVE PAGE: Explicitly link to the created editionId
+            await savePage({
+                editionId: editionId,
                 pageNumber: i,
                 imageUrl: url,
                 title: `Page ${i}`
@@ -93,13 +95,14 @@ const ImageUploader = ({ onUploadComplete }) => {
             setStatusLabel('Transmitting Master PDF...');
             const fileUrl = await uploadToStorage(file, 'epaper/pdfs', (p) => setProgress(p * 0.1));
 
-            // 2. Create Edition Placeholder
+            // 2. Create Edition Placeholder (Draft visibility)
             const editionId = await saveEdition({
                 name: editionTitle,
                 editionDate: editionDate,
                 type: 'pdf-images',
                 fileUrl: fileUrl,
                 status: 'published',
+                isVisible: false, // Hide until fully converted
                 isActive: true
             });
 
@@ -108,11 +111,14 @@ const ImageUploader = ({ onUploadComplete }) => {
             const pageCount = conversionResult.totalPages;
             const thumbnailUrl = conversionResult.imageUrls[0];
 
-            // 4. Update Edition
+            // 4. Final Metadata Sync & Public Reveal
             await saveEdition({
                 id: editionId,
+                thumbnail: thumbnailUrl,
                 thumbnailUrl: thumbnailUrl,
-                pageCount: pageCount
+                pageCount: pageCount,
+                isVisible: true,
+                publishedAt: serverTimestamp()
             });
 
             setStatusLabel('Archive Published Successfully');

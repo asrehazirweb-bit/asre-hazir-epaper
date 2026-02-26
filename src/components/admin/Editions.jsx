@@ -19,14 +19,13 @@ const Editions = ({ editions, onEdit, onDelete }) => {
             // Import the save service or do it directly via db
             // For now, we'll assume a local update function or pass it via props
             // But let's just use the direct Firestore update for simplicity here
-            const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-            const { db } = await import('../../firebase/config');
+            const { saveEdition } = await import('../../services/epaperService');
 
-            await updateDoc(doc(db, 'epaper_editions', editingEdition.id), {
+            await saveEdition({
+                id: editingEdition.id,
                 name: editingEdition.name,
                 editionDate: editingEdition.editionDate,
-                status: editingEdition.status,
-                updatedAt: serverTimestamp()
+                status: editingEdition.status
             });
             setEditingEdition(null);
             // The onSnapshot in AdminLayout will auto-update the list

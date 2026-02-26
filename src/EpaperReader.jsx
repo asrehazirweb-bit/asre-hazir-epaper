@@ -43,6 +43,8 @@ const EpaperReader = () => {
     const activeRequestRef = useRef(0);
     const timeoutRef = useRef(null);
     const datePickerRef = useRef(null);
+    const lastIdRef = useRef(null);
+    const incrementedRef = useRef(new Set());
 
     // Click outside handler for date picker
     useEffect(() => {
@@ -67,22 +69,34 @@ const EpaperReader = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // REAL-TIME FETCH: Editions (Source of Truth)
+    // REAL-TIME FETCH: Editions (Resilient Hybrid Sort)
     useEffect(() => {
+        // Simple query to avoid complex index requirements or missing timestamp skip-outs
         const q = query(
             collection(db, 'epaper_editions'),
-            where("status", "==", "published"),
-            where("isActive", "==", true),
-            orderBy('editionDate', 'desc')
+            where("status", "==", "published")
         );
 
         const unsub = onSnapshot(q, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            let data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            // 🧠 Resilient Client-Side Hybrid Sort
+            // Sort by publishedAt desc, fallback to editionDate desc, fallback to id
+            data.sort((a, b) => {
+                const timeA = a.publishedAt?.toMillis() || new Date(a.editionDate || 0).getTime();
+                const timeB = b.publishedAt?.toMillis() || new Date(b.editionDate || 0).getTime();
+                return timeB - timeA;
+            });
+
+            // Secondary filter: Ensure visibility (even if already filtered by status)
+            // This is our 'Safe-Publish' gate.
+            data = data.filter(e => e.isVisible !== false);
+
             setEditions(data);
             setLoading(false);
         }, (err) => {
             console.error("Firestore Error:", err);
-            setError("Connectivity lost. Reconnecting...");
+            setError("Critical Signal Sync Failed. Retrying...");
             setLoading(false);
         });
 
@@ -111,7 +125,7 @@ const EpaperReader = () => {
         // Start safety timeout
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
         timeoutRef.current = setTimeout(() => {
-            if (activeRequestRef.current === requestId && feedStatus === 'loading') {
+            if (activeRequestRef.current === requestId) {
                 console.warn("Feed request timed out");
                 setFeedStatus('error');
                 setError("Scanning signal lost. Please check connection.");
@@ -126,18 +140,14 @@ const EpaperReader = () => {
             if (activeRequestRef.current !== requestId) return;
 
             setPages(fetchedPages);
-
-            // Only reset index if switching dates, not just refreshing? 
-            // For now, reset to page 1 on date switch.
             setCurrentPageIndex(0);
 
-            // Fetch Articles for first page immediately to avoid chained renders
+            // Fetch Articles for first page immediately
             if (fetchedPages.length > 0) {
                 const fetchedArticles = await getArticlesByPage(fetchedPages[0].id);
                 if (activeRequestRef.current === requestId) {
                     setArticles(fetchedArticles);
                     setFeedStatus('success');
-                    incrementReaders(editionId);
                 }
             } else {
                 setFeedStatus('success');
@@ -152,14 +162,9 @@ const EpaperReader = () => {
                 setError("Failed to resolve digital feed.");
             }
         }
-    }, [feedStatus]);
+    }, []); // ⚡ Broken loop fix: LoadFeed no longer depends on feedStatus
 
-    // Track incremented editions to prevent infinite loops
-    const incrementedRef = useRef(new Set());
-    // Track last selected ID to only auto-collapse on actual change
-    const lastIdRef = useRef(null);
-
-    // Handle Edition Switch - Separate core logic from reactive increment
+    // Handle Edition Switch
     useEffect(() => {
         if (!selectedEditionId) {
             lastIdRef.current = null;
@@ -169,28 +174,26 @@ const EpaperReader = () => {
         const edition = editions.find(e => e.id === selectedEditionId);
         if (!edition) return;
 
-        // 1. Static Metadata Sync
+        // Sync Metadata
         if (edition.editionDate !== selectedDate) setSelectedDate(edition.editionDate);
         setSelectedArticle(null);
 
-        // 2. Load Content
-        // 2. Load Content - Now unified image-based feed
-        loadFeed(edition.editionDate, edition.id);
-
-        // 3. Reader Increment (One-time per selection session)
-        if (!incrementedRef.current.has(selectedEditionId)) {
-            incrementedRef.current.add(selectedEditionId);
-            // Non-blocking increment call
-            incrementReaders(selectedEditionId).catch(() => { });
-        }
-
-        // 4. Auto-collapse sidebar ONLY on NEW selection for mobile
-        if (isMobile && lastIdRef.current !== selectedEditionId) {
-            setLeftPanelCollapsed(true);
+        // Only trigger loadFeed if the ID has actually changed 
+        // OR if we are in an idle/error state and need a reload
+        if (lastIdRef.current !== selectedEditionId || feedStatus === 'idle' || feedStatus === 'error') {
             lastIdRef.current = selectedEditionId;
-        }
+            loadFeed(edition.editionDate, edition.id);
 
-    }, [selectedEditionId, editions, isMobile]);
+            // Reader Increment
+            if (!incrementedRef.current.has(selectedEditionId)) {
+                incrementedRef.current.add(selectedEditionId);
+                incrementReaders(selectedEditionId).catch(() => { });
+            }
+
+            // Auto-collapse sidebar for mobile
+            if (isMobile) setLeftPanelCollapsed(true);
+        }
+    }, [selectedEditionId, editions, isMobile, loadFeed, feedStatus]);
 
     // Handle Page Navigation within same edition
     const handlePageNavigation = useCallback(async (index) => {
@@ -267,11 +270,32 @@ const EpaperReader = () => {
 
     if (editions.length === 0) {
         return (
-            <div className="h-screen flex items-center justify-center bg-[#0B0F19]">
-                <div className="text-center space-y-6">
-                    <Newspaper className="w-16 h-16 text-gray-800 mx-auto" />
-                    <h2 className="text-xl font-black uppercase tracking-widest italic text-gray-700">No Published Editions</h2>
-                    <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.2em]">Check Admin Panel for draft status</p>
+            <div className="h-screen flex items-center justify-center bg-white p-10">
+                <div className="text-center space-y-10 max-w-md">
+                    <div className="relative inline-block">
+                        <div className="w-24 h-24 bg-gray-50 rounded-[2.5rem] flex items-center justify-center mx-auto border border-gray-100 shadow-inner">
+                            <Newspaper size={40} className="text-gray-200" />
+                        </div>
+                        <motion.div
+                            animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.3, 0.1] }}
+                            transition={{ duration: 4, repeat: Infinity }}
+                            className="absolute inset-0 bg-[#AA792D]/10 blur-3xl rounded-full -z-10"
+                        />
+                    </div>
+                    <div className="space-y-4">
+                        <p className="text-[10px] font-black text-[#AA792D] uppercase tracking-[0.5em]">Network Node Dormant</p>
+                        <h2 className="text-3xl font-black uppercase tracking-tighter italic text-[#2B2523]">No Active <span className="text-[#AA792D]">Archives</span></h2>
+                        <p className="text-gray-400 text-xs font-bold leading-relaxed uppercase tracking-widest">
+                            The intelligence repository for this node is currently offline. <br />
+                            Verify deployment status in the <span className="text-[#2B2523] underline decoration-[#AA792D] decoration-2">Admin Gateway</span>.
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => navigate('/admin')}
+                        className="px-10 py-4 bg-[#2B2523] text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] shadow-2xl hover:bg-[#AA792D] transition-all active:scale-95"
+                    >
+                        Access Admin Panel
+                    </button>
                 </div>
             </div>
         );
