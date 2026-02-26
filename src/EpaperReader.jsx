@@ -6,8 +6,8 @@ import { collection, query, onSnapshot, where, orderBy } from 'firebase/firestor
 import EditionFeed from './components/EditionFeed';
 import DocumentSidebar from './components/DocumentSidebar';
 import {
-    Loader2, Newspaper, ChevronLeft, Sidebar, LayoutGrid, User,
-    Download, Maximize2, ZoomIn, ZoomOut, AlertCircle
+    Loader2, Newspaper, ChevronLeft, Sidebar as SidebarIcon, LayoutGrid, User,
+    Download, Maximize2, ZoomIn, ZoomOut, AlertCircle, X, Menu
 } from 'lucide-react';
 import { getPagesByEdition, incrementReaders } from './services/epaperService';
 
@@ -16,28 +16,30 @@ const EpaperReader = () => {
     const [editions, setEditions] = useState([]);
     const [pages, setPages] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [feedStatus, setFeedStatus] = useState('idle'); // idle | loading | success | empty
+    const [feedStatus, setFeedStatus] = useState('idle');
     const [selectedEditionId, setSelectedEditionId] = useState(null);
-    const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
 
-    const [selectedDate, setSelectedDate] = useState(null);
     const [zoom, setZoom] = useState(100);
+    const [selectedDate, setSelectedDate] = useState(null);
     const incrementedRef = useRef(new Set());
 
-    // Responsive Monitor
+    // Sync isMobile more frequently or via ResizeObserver for robustness
     useEffect(() => {
-        const handleResize = () => {
+        const updateWidth = () => {
             const mobile = window.innerWidth < 1024;
             setIsMobile(mobile);
-            if (mobile) setLeftPanelCollapsed(true);
+            // On desktop, default to open. On mobile, default to closed.
+            if (mobile) setSidebarOpen(false);
+            else setSidebarOpen(true);
         };
-        window.addEventListener('resize', handleResize);
-        handleResize();
-        return () => window.removeEventListener('resize', handleResize);
+        window.addEventListener('resize', updateWidth);
+        updateWidth();
+        return () => window.removeEventListener('resize', updateWidth);
     }, []);
 
-    // Fetch Published Editions
+    // Initial Data Sync
     useEffect(() => {
         const q = query(collection(db, 'epaper_editions'), where("status", "==", "published"));
         const unsub = onSnapshot(q, (snapshot) => {
@@ -55,12 +57,12 @@ const EpaperReader = () => {
 
     const handleDateSelect = useCallback((date) => setSelectedDate(date), []);
 
-    // ATOMIC PAGE FETCHER (The "Image Stream" Heart)
+    // Atomic Page Loader
     const loadEditionPages = useCallback(async (editionId) => {
         setFeedStatus('loading');
+        setPages([]);
         try {
             const fetchedPages = await getPagesByEdition(editionId);
-            // Sort pages numerically
             fetchedPages.sort((a, b) => (a.pageNumber || 0) - (b.pageNumber || 0));
             setPages(fetchedPages);
             setFeedStatus(fetchedPages.length > 0 ? 'success' : 'empty');
@@ -70,14 +72,15 @@ const EpaperReader = () => {
         }
     }, []);
 
-    // Handle Edition Selection
+    // Selection Handler
     const handleEditionSelect = useCallback((edition) => {
         setSelectedEditionId(edition.id);
         loadEditionPages(edition.id);
-        if (isMobile) setLeftPanelCollapsed(true);
-    }, [isMobile, loadEditionPages]);
+        if (window.innerWidth < 1024) setSidebarOpen(false);
+        // Ensure we scroll to top of reader when switching
+        window.scrollTo(0, 0);
+    }, [loadEditionPages]);
 
-    // Analytics Trigger
     useEffect(() => {
         if (selectedEditionId && !incrementedRef.current.has(selectedEditionId)) {
             incrementedRef.current.add(selectedEditionId);
@@ -85,14 +88,10 @@ const EpaperReader = () => {
         }
     }, [selectedEditionId]);
 
-    // Loading Screen
     if (loading) {
         return (
-            <div className="h-screen flex items-center justify-center bg-white">
-                <div className="text-center space-y-4">
-                    <Loader2 className="w-10 h-10 text-[#AA792D] animate-spin mx-auto" />
-                    <p className="text-[10px] font-black uppercase tracking-[0.4em] text-gray-400">Synchronizing Archives...</p>
-                </div>
+            <div className="h-screen bg-white flex items-center justify-center">
+                <Loader2 className="w-10 h-10 text-[#AA792D] animate-spin" />
             </div>
         );
     }
@@ -100,53 +99,66 @@ const EpaperReader = () => {
     const currentEdition = editions.find(e => e.id === selectedEditionId);
 
     return (
-        <div className="h-screen flex flex-col bg-white text-[#2B2523] font-sans selection:bg-[#AA792D]/20 overflow-hidden">
+        <div className="h-[100dvh] w-full flex flex-col bg-white text-[#2B2523] font-sans selection:bg-[#AA792D]/20 overflow-hidden">
 
-            {/* Global Branding Header (Only if Feed is Active) */}
+            {/* 1. TOP HEADER (Only in Home Feed) */}
             {!selectedEditionId && (
-                <header className="h-20 bg-white border-b border-gray-100 px-8 flex items-center justify-between shrink-0 z-50">
-                    <div className="flex items-center gap-5">
-                        <div className="w-10 h-10 bg-[#AA792D] rounded-xl flex items-center justify-center shadow-lg shadow-[#AA792D]/20">
+                <header className="h-16 lg:h-20 bg-white border-b border-gray-100 flex items-center justify-between px-6 lg:px-10 shrink-0 z-50">
+                    <div className="flex items-center gap-4 lg:gap-6">
+                        <div className="w-9 h-9 lg:w-11 h-11 bg-[#AA792D] rounded-xl flex items-center justify-center shadow-lg shadow-[#AA792D]/20">
                             <Newspaper size={18} className="text-white" />
                         </div>
                         <div>
-                            <h1 className="text-sm font-black uppercase tracking-tighter italic">Asre Hazir <span className="text-[#AA792D]">Digital</span></h1>
-                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Industrial e-paper Feed</p>
+                            <h1 className="text-xs lg:text-sm font-black uppercase tracking-tight italic">
+                                Asre Hazir <span className="text-[#AA792D]">Digital</span>
+                            </h1>
+                            <p className="text-[8px] lg:text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Industrial e-paper</p>
                         </div>
                     </div>
-                    <button onClick={() => navigate('/admin')} className="p-3 rounded-xl hover:bg-gray-50 text-gray-400 hover:text-[#AA792D] transition-all">
+                    <button onClick={() => navigate('/admin')} className="p-2.5 rounded-xl hover:bg-gray-50 text-gray-400 hover:text-[#AA792D] transition-all">
                         <User size={20} />
                     </button>
                 </header>
             )}
 
-            <div className="flex-1 flex overflow-hidden relative">
-                {/* Mobile Backdrop */}
+            <div className="flex-1 flex w-full overflow-hidden relative">
+
+                {/* 2. SIDEBAR NAVIGATION - Improved Mobile logic */}
                 <AnimatePresence>
-                    {!leftPanelCollapsed && isMobile && selectedEditionId && (
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setLeftPanelCollapsed(true)} className="fixed inset-0 bg-[#2B2523]/60 backdrop-blur-sm z-30 lg:hidden" />
+                    {selectedEditionId && sidebarOpen && (
+                        <>
+                            {/* Backdrop: ALWAYS fixed on ALL screens when sidebarOpen is true in a overlay context */}
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setSidebarOpen(false)}
+                                className={`fixed inset-0 bg-[#2B2523]/40 backdrop-blur-sm z-[60] ${isMobile ? 'block' : 'hidden'}`}
+                            />
+
+                            <motion.aside
+                                initial={{ x: '-100%' }}
+                                animate={{ x: 0 }}
+                                exit={{ x: '-100%' }}
+                                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                                className={`bg-white border-r border-gray-100 flex flex-col shrink-0 z-[100] fixed inset-y-0 left-0 w-80 shadow-2xl lg:relative lg:shadow-none lg:z-10`}
+                            >
+                                <DocumentSidebar
+                                    editions={editions}
+                                    selectedEditionId={selectedEditionId}
+                                    onClose={() => setSidebarOpen(false)}
+                                    onSelect={handleEditionSelect}
+                                />
+                            </motion.aside>
+                        </>
                     )}
                 </AnimatePresence>
 
-                {/* Sidebar (Reader Mode) */}
-                <AnimatePresence>
-                    {selectedEditionId && (
-                        <motion.aside
-                            initial={isMobile ? { x: -320 } : { width: 0 }}
-                            animate={isMobile ? { x: leftPanelCollapsed ? -320 : 0 } : { width: leftPanelCollapsed ? 0 : 320 }}
-                            exit={isMobile ? { x: -320 } : { width: 0 }}
-                            className={`bg-white border-r border-gray-100 flex flex-col shrink-0 z-40 relative ${isMobile ? 'fixed inset-y-0 left-0 w-80 shadow-2xl' : 'h-full'}`}
-                        >
-                            <DocumentSidebar editions={editions} selectedEditionId={selectedEditionId} onClose={() => setLeftPanelCollapsed(true)} onSelect={handleEditionSelect} />
-                        </motion.aside>
-                    )}
-                </AnimatePresence>
-
-                {/* Main Workspace */}
-                <main className="flex-1 relative bg-white flex flex-col overflow-hidden">
+                {/* 3. MAIN WORKSPACE - Now with dynamic margin to avoid the "White Block" overlap */}
+                <main className={`flex-1 flex flex-col min-w-0 bg-white relative overflow-hidden transition-all duration-300`}>
                     {!selectedEditionId ? (
-                        /* State 1: FEED VIEW */
-                        <div className="flex-1 flex flex-col overflow-hidden">
+                        /* Feed State */
+                        <div className="flex-1 flex flex-col overflow-hidden w-full">
                             <EditionFeed
                                 editions={editions}
                                 onSelect={handleEditionSelect}
@@ -155,79 +167,80 @@ const EpaperReader = () => {
                             />
                         </div>
                     ) : (
-                        /* State 2: READER VIEW (The Image Stream) */
-                        <div className="flex-1 flex flex-col overflow-hidden relative bg-[#F8F9FB]">
+                        /* Reader State */
+                        <div className="flex-1 flex flex-col overflow-hidden w-full h-full">
 
-                            {/* Reader Toolbar */}
-                            <header className="h-16 bg-white border-b border-gray-100 flex items-center justify-between px-6 shrink-0 z-30 shadow-sm">
-                                <div className="flex items-center gap-4">
-                                    <button onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)} className={`p-2.5 rounded-xl transition-all ${leftPanelCollapsed ? 'bg-gray-50 text-[#AA792D]' : 'bg-[#2B2523] text-white shadow-lg shadow-[#2B2523]/20'}`}>
-                                        <Sidebar size={18} />
+                            {/* Reader Controls (Toolbar) */}
+                            <header className="h-16 bg-white border-b border-gray-100 flex items-center justify-between px-4 lg:px-6 shrink-0 z-40 shadow-sm">
+                                <div className="flex items-center gap-2 lg:gap-4">
+                                    <button
+                                        onClick={() => setSidebarOpen(!sidebarOpen)}
+                                        className={`p-2.5 rounded-xl transition-all ${sidebarOpen ? 'bg-[#2B2523] text-white shadow-lg' : 'bg-gray-50 text-[#AA792D]'}`}
+                                    >
+                                        <SidebarIcon size={18} />
                                     </button>
-                                    <div className="h-6 w-px bg-gray-100 mx-1 hidden sm:block" />
-                                    <button onClick={() => setSelectedEditionId(null)} className="flex items-center gap-2 px-4 py-2 hover:bg-gray-50 rounded-xl text-[10px] font-black uppercase tracking-widest text-[#AA792D] transition-all">
-                                        <LayoutGrid size={16} /> Library
+                                    <button onClick={() => setSelectedEditionId(null)} className="flex items-center gap-2 px-3 lg:px-4 py-2 hover:bg-gray-50 rounded-xl text-[10px] font-black uppercase tracking-widest text-[#AA792D] transition-all">
+                                        <LayoutGrid size={16} /> <span className="hidden sm:inline">Library</span>
                                     </button>
                                 </div>
 
                                 <div className="hidden md:flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl p-1">
-                                    <button onClick={() => setZoom(z => Math.max(50, z - 25))} className="p-2 hover:bg-white rounded-lg hover:text-[#AA792D] transition-all"><ZoomOut size={16} /></button>
+                                    <button onClick={() => setZoom(z => Math.max(50, z - 25))} className="p-2 hover:bg-white rounded-lg hover:text-[#AA792D] transition-all"><ZoomOut size={14} /></button>
                                     <span className="text-[9px] font-black px-2 w-12 text-center text-[#2B2523]">{zoom}%</span>
-                                    <button onClick={() => setZoom(z => Math.min(200, z + 25))} className="p-2 hover:bg-white rounded-lg hover:text-[#AA792D] transition-all"><ZoomIn size={16} /></button>
+                                    <button onClick={() => setZoom(z => Math.min(200, z + 25))} className="p-2 hover:bg-white rounded-lg hover:text-[#AA792D] transition-all"><ZoomIn size={14} /></button>
                                 </div>
 
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2 lg:gap-3">
                                     <div className="text-right hidden sm:block">
-                                        <p className="text-[10px] font-black uppercase tracking-tight text-[#2B2523]">{currentEdition?.name}</p>
-                                        <p className="text-[8px] font-bold text-[#AA792D] uppercase tracking-widest">{pages.length} Pages • Ready</p>
+                                        <p className="text-[10px] font-black uppercase tracking-tight text-[#2B2523] truncate max-w-[150px]">{currentEdition?.name}</p>
+                                        <p className="text-[8px] font-bold text-[#AA792D] uppercase tracking-widest">{pages.length} Pages</p>
                                     </div>
-                                    <div className="h-6 w-px bg-gray-100 mx-1" />
                                     <button
                                         onClick={() => window.open(currentEdition?.fileUrl, '_blank')}
-                                        className="flex items-center gap-2 px-5 py-2.5 bg-[#AA792D] text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:opacity-90 shadow-xl shadow-[#AA792D]/20 transition-all active:scale-95"
+                                        className="flex items-center gap-2 px-4 lg:px-5 py-2 lg:py-2.5 bg-[#AA792D] text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-xl shadow-[#AA792D]/20 transition-all hover:scale-105 active:scale-95"
                                     >
-                                        <Download size={14} /> PDF
+                                        <Download size={14} /> <span className="hidden xs:inline">PDF</span>
                                     </button>
                                 </div>
                             </header>
 
-                            {/* THE IMAGE STREAM (Hans India Style) */}
-                            <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#EDF0F3] p-6 lg:p-12 relative">
+                            {/* Scrolling Image Feed */}
+                            <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#EDEFF2] p-4 lg:p-12 relative">
                                 {feedStatus === 'loading' && (
-                                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#EDF0F3]/80 backdrop-blur-sm">
-                                        <div className="text-center space-y-4">
-                                            <Loader2 className="w-12 h-12 text-[#AA792D] animate-spin mx-auto" />
-                                            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#2B2523]">Decoding Image Frame Stream...</p>
+                                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#EDEFF2]/80 backdrop-blur-sm">
+                                        <div className="flex flex-col items-center gap-4">
+                                            <Loader2 className="w-10 h-10 text-[#AA792D] animate-spin" />
+                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Loading Digital Pages...</p>
                                         </div>
                                     </div>
                                 )}
 
                                 {feedStatus === 'empty' ? (
-                                    <div className="flex flex-col items-center justify-center py-32 text-center">
-                                        <AlertCircle size={48} className="text-gray-300 mb-6" />
-                                        <h3 className="text-lg font-black uppercase tracking-tight text-[#2B2523]">Processing Digital Feed</h3>
-                                        <p className="text-xs text-gray-400 font-bold uppercase tracking-widest max-w-xs mt-2">
-                                            The pages for this edition are currently being converted. Please try again in 60 seconds.
-                                        </p>
+                                    <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+                                        <AlertCircle size={40} className="text-gray-300" />
+                                        <div className="space-y-1">
+                                            <h3 className="text-sm font-black uppercase text-[#2B2523]">Processing Edition</h3>
+                                            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Images are being generated...</p>
+                                        </div>
                                     </div>
                                 ) : (
-                                    <div className="max-w-5xl mx-auto space-y-12 pb-32">
+                                    <div className="max-w-4xl mx-auto space-y-8 lg:space-y-12 pb-32">
                                         {pages.map((page, idx) => (
                                             <motion.div
                                                 key={page.id}
-                                                initial={{ opacity: 0, y: 50 }}
+                                                initial={{ opacity: 0, y: 30 }}
                                                 whileInView={{ opacity: 1, y: 0 }}
-                                                viewport={{ once: true, margin: "-100px" }}
-                                                className="relative bg-white shadow-2xl rounded-sm overflow-hidden border border-gray-200"
-                                                style={{ width: `${zoom}%`, margin: '0 auto' }}
+                                                viewport={{ once: true, margin: '-50px' }}
+                                                className="relative bg-white shadow-xl rounded-[0.5rem] lg:rounded-[1rem] overflow-hidden border border-gray-100"
+                                                style={{ width: isMobile ? '100%' : `${zoom}%`, margin: '0 auto' }}
                                             >
                                                 <img
                                                     src={page.imageUrl}
                                                     alt={`Page ${idx + 1}`}
-                                                    className="w-full h-auto block select-none pointer-events-none"
+                                                    className="w-full h-auto block"
                                                     loading="lazy"
                                                 />
-                                                <div className="absolute top-4 left-4 px-4 py-1.5 bg-black/80 text-white text-[8px] font-black uppercase tracking-widest rounded-lg backdrop-blur-md">
+                                                <div className="absolute top-3 left-3 lg:top-6 lg:left-6 px-3 lg:px-4 py-1 lg:py-1.5 bg-black/70 text-white text-[7px] lg:text-[8px] font-black uppercase tracking-widest rounded-lg backdrop-blur-md">
                                                     Page {page.pageNumber || idx + 1}
                                                 </div>
                                             </motion.div>
