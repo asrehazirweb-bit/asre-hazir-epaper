@@ -167,15 +167,9 @@ const Editions = ({ editions, onEdit, onDelete }) => {
                                                         onEdit(edition.id);
                                                     }
                                                 }}
-                                                className="col-span-2 flex items-center justify-center gap-2 py-3 bg-[#2B2523] text-white hover:bg-black rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-black/10"
+                                                className="col-span-3 flex items-center justify-center gap-2 py-3 bg-[#2B2523] text-white hover:bg-black rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-black/10"
                                             >
                                                 <Edit2 size={12} /> {edition.type === 'pdf' ? 'Update' : 'Control'}
-                                            </button>
-                                            <button
-                                                onClick={() => window.open(`/edition/${edition.id}`, '_blank')}
-                                                className="flex items-center justify-center bg-gray-50 hover:bg-gray-100 text-gray-400 hover:text-[#AA792D] py-3 rounded-xl transition-all border border-gray-100"
-                                            >
-                                                <Eye size={14} />
                                             </button>
                                             <button onClick={() => onDelete(edition.id)} className="flex items-center justify-center bg-red-50 hover:bg-red-500 text-red-500 hover:text-white py-3 rounded-xl transition-all border border-red-100 hover:border-red-500">
                                                 <Trash2 size={14} />

@@ -1,61 +1,29 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { db } from './firebase/config';
-import { collection, query, orderBy, getDocs, onSnapshot, where } from 'firebase/firestore';
-import PageThumbnailList from './components/PageThumbnailList';
-import PageViewer from './components/PageViewer';
-import ArticlePreview from './components/ArticlePreview';
+import { collection, query, onSnapshot, where, orderBy } from 'firebase/firestore';
 import EditionFeed from './components/EditionFeed';
-import NewspaperStream from './components/NewspaperStream';
 import DocumentSidebar from './components/DocumentSidebar';
 import {
-    Loader2, Calendar, Globe, Newspaper, ChevronLeft, ChevronRight,
-    Maximize2, Sidebar, PanelsTopLeft, Search, User, LogIn,
-    Zap, Activity, Clock, AlertTriangle, Home, Menu, X
+    Loader2, Newspaper, ChevronLeft, Sidebar, LayoutGrid, User,
+    Download, Maximize2, ZoomIn, ZoomOut, AlertCircle
 } from 'lucide-react';
-import { getPagesByEdition, getArticlesByPage, incrementReaders } from './services/epaperService';
-
-const FEED_TIMEOUT_MS = 8000; // 8 seconds fallback
+import { getPagesByEdition, incrementReaders } from './services/epaperService';
 
 const EpaperReader = () => {
     const navigate = useNavigate();
-    // Infrastructure State
     const [editions, setEditions] = useState([]);
     const [pages, setPages] = useState([]);
-    const [articles, setArticles] = useState([]);
-    const [loading, setLoading] = useState(true); // Initial app load
-
-    // Feed Lifecycle State
-    const [feedStatus, setFeedStatus] = useState('idle'); // idle | loading | success | error
-    const [selectedDate, setSelectedDate] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [feedStatus, setFeedStatus] = useState('idle'); // idle | loading | success | empty
     const [selectedEditionId, setSelectedEditionId] = useState(null);
-    const [currentPageIndex, setCurrentPageIndex] = useState(0);
-    const [selectedArticle, setSelectedArticle] = useState(null);
-
-    // UI State
     const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
-    const [showDatePicker, setShowDatePicker] = useState(false);
-    const [error, setError] = useState(null);
 
-    // Refs for Request Control
-    const activeRequestRef = useRef(0);
-    const timeoutRef = useRef(null);
-    const datePickerRef = useRef(null);
-    const lastIdRef = useRef(null);
+    const [selectedDate, setSelectedDate] = useState(null);
+    const [zoom, setZoom] = useState(100);
     const incrementedRef = useRef(new Set());
-
-    // Click outside handler for date picker
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (datePickerRef.current && !datePickerRef.current.contains(event.target)) {
-                setShowDatePicker(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
 
     // Responsive Monitor
     useEffect(() => {
@@ -69,535 +37,208 @@ const EpaperReader = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // REAL-TIME FETCH: Editions (Resilient Hybrid Sort)
+    // Fetch Published Editions
     useEffect(() => {
-        // Simple query to avoid complex index requirements or missing timestamp skip-outs
-        const q = query(
-            collection(db, 'epaper_editions'),
-            where("status", "==", "published")
-        );
-
+        const q = query(collection(db, 'epaper_editions'), where("status", "==", "published"));
         const unsub = onSnapshot(q, (snapshot) => {
             let data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-            // 🧠 Resilient Client-Side Hybrid Sort
-            // Sort by publishedAt desc, fallback to editionDate desc, fallback to id
             data.sort((a, b) => {
                 const timeA = a.publishedAt?.toMillis() || new Date(a.editionDate || 0).getTime();
                 const timeB = b.publishedAt?.toMillis() || new Date(b.editionDate || 0).getTime();
                 return timeB - timeA;
             });
-
-            // Secondary filter: Ensure visibility (even if already filtered by status)
-            // This is our 'Safe-Publish' gate.
-            data = data.filter(e => e.isVisible !== false);
-
-            setEditions(data);
-            setLoading(false);
-        }, (err) => {
-            console.error("Firestore Error:", err);
-            setError("Critical Signal Sync Failed. Retrying...");
+            setEditions(data.filter(e => e.isVisible !== false));
             setLoading(false);
         });
-
         return () => unsub();
     }, []);
 
-    // Landing logic: AUTO-SYNC to Latest Edition Date
-    useEffect(() => {
-        if (editions.length > 0) {
-            // If no date selected, OR if the current selected date is no longer the latest 
-            // and we are still on the first load/idle state, sync to latest.
-            if (!selectedDate) {
-                setSelectedDate(editions[0].editionDate);
-            }
-        }
-    }, [editions, selectedDate]);
+    const handleDateSelect = useCallback((date) => setSelectedDate(date), []);
 
-    // ATOMIC FEED SWITCHER
-    const loadFeed = useCallback(async (date, editionId) => {
-        const requestId = Date.now();
-        activeRequestRef.current = requestId;
-
+    // ATOMIC PAGE FETCHER (The "Image Stream" Heart)
+    const loadEditionPages = useCallback(async (editionId) => {
         setFeedStatus('loading');
-        setError(null);
-
-        // Start safety timeout
-        if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        timeoutRef.current = setTimeout(() => {
-            if (activeRequestRef.current === requestId) {
-                console.warn("Feed request timed out");
-                setFeedStatus('error');
-                setError("Scanning signal lost. Please check connection.");
-            }
-        }, FEED_TIMEOUT_MS);
-
         try {
-            // Fetch Pages
             const fetchedPages = await getPagesByEdition(editionId);
-
-            // Atomic check: Is this request still valid?
-            if (activeRequestRef.current !== requestId) return;
-
+            // Sort pages numerically
+            fetchedPages.sort((a, b) => (a.pageNumber || 0) - (b.pageNumber || 0));
             setPages(fetchedPages);
-            setCurrentPageIndex(0);
-
-            // Fetch Articles for first page immediately
-            if (fetchedPages.length > 0) {
-                const fetchedArticles = await getArticlesByPage(fetchedPages[0].id);
-                if (activeRequestRef.current === requestId) {
-                    setArticles(fetchedArticles);
-                    setFeedStatus('success');
-                }
-            } else {
-                setFeedStatus('success');
-            }
-
-            if (timeoutRef.current) clearTimeout(timeoutRef.current);
-
+            setFeedStatus(fetchedPages.length > 0 ? 'success' : 'empty');
         } catch (err) {
-            if (activeRequestRef.current === requestId) {
-                console.error("Feed error:", err);
-                setFeedStatus('error');
-                setError("Failed to resolve digital feed.");
-            }
+            console.error("Page Load Error:", err);
+            setFeedStatus('error');
         }
-    }, []); // ⚡ Broken loop fix: LoadFeed no longer depends on feedStatus
+    }, []);
 
-    // Handle Edition Switch
+    // Handle Edition Selection
+    const handleEditionSelect = useCallback((edition) => {
+        setSelectedEditionId(edition.id);
+        loadEditionPages(edition.id);
+        if (isMobile) setLeftPanelCollapsed(true);
+    }, [isMobile, loadEditionPages]);
+
+    // Analytics Trigger
     useEffect(() => {
-        if (!selectedEditionId) {
-            lastIdRef.current = null;
-            return;
+        if (selectedEditionId && !incrementedRef.current.has(selectedEditionId)) {
+            incrementedRef.current.add(selectedEditionId);
+            incrementReaders(selectedEditionId).catch(() => { });
         }
+    }, [selectedEditionId]);
 
-        const edition = editions.find(e => e.id === selectedEditionId);
-        if (!edition) return;
-
-        // Sync Metadata
-        if (edition.editionDate !== selectedDate) setSelectedDate(edition.editionDate);
-        setSelectedArticle(null);
-
-        // Only trigger loadFeed if the ID has actually changed 
-        // OR if we are in an idle/error state and need a reload
-        if (lastIdRef.current !== selectedEditionId || feedStatus === 'idle' || feedStatus === 'error') {
-            lastIdRef.current = selectedEditionId;
-            loadFeed(edition.editionDate, edition.id);
-
-            // Reader Increment
-            if (!incrementedRef.current.has(selectedEditionId)) {
-                incrementedRef.current.add(selectedEditionId);
-                incrementReaders(selectedEditionId).catch(() => { });
-            }
-
-            // Auto-collapse sidebar for mobile
-            if (isMobile) setLeftPanelCollapsed(true);
-        }
-    }, [selectedEditionId, editions, isMobile, loadFeed, feedStatus]);
-
-    // Handle Page Navigation within same edition
-    const handlePageNavigation = useCallback(async (index) => {
-        if (!pages[index]) return;
-
-        const requestId = Date.now();
-        activeRequestRef.current = requestId;
-
-        setFeedStatus('loading');
-        setSelectedArticle(null);
-        setCurrentPageIndex(index);
-
-        try {
-            const fetchedArticles = await getArticlesByPage(pages[index].id);
-            if (activeRequestRef.current === requestId) {
-                setArticles(fetchedArticles);
-                setFeedStatus('success');
-            }
-        } catch (err) {
-            if (activeRequestRef.current === requestId) {
-                setFeedStatus('error');
-            }
-        }
-    }, [pages]);
-
-    const handleArticleClick = useCallback((art) => {
-        setSelectedArticle({ ...art, imageUrl: pages[currentPageIndex]?.imageUrl });
-    }, [pages, currentPageIndex]);
-
-    const handleCoordinateClick = useCallback(({ x, y, pageUrl }) => {
-        const hit = articles.find(art =>
-            x >= art.rect.x && x <= (art.rect.x + art.rect.w) &&
-            y >= art.rect.y && y <= (art.rect.y + art.rect.h)
-        );
-
-        if (hit) {
-            setSelectedArticle({ ...hit, imageUrl: pageUrl });
-        } else {
-            // 🧠 AI Discovery: Create a smart-crop for any arbitrary click (Like Hans India)
-            setSelectedArticle({
-                id: 'ai-discovery-' + Date.now(),
-                headline: 'Captured News Segment',
-                content: 'This area has not been indexed yet. Swipe to "Picture" view to see the original scan high-fidelity.',
-                // Create a 20% width/15% height centered box around the click
-                rect: {
-                    x: Math.max(0, x - 15),
-                    y: Math.max(0, y - 10),
-                    w: 30,
-                    h: 20
-                },
-                imageUrl: pageUrl,
-                verified: false,
-                isDiscovery: true
-            });
-        }
-    }, [articles]);
-
-    const viewerPageData = useMemo(() => ({
-        ...(pages[currentPageIndex] || {}),
-        articles
-    }), [pages, currentPageIndex, articles]);
-
-    // Initial Full-Screen Loaders
+    // Loading Screen
     if (loading) {
         return (
-            <div className="h-screen flex items-center justify-center bg-[#0B0F19]">
-                <div className="text-center space-y-6">
-                    <Loader2 className="w-12 h-12 text-blue-500 animate-spin mx-auto" />
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em] animate-pulse">Initializing Newsroom Engine...</p>
+            <div className="h-screen flex items-center justify-center bg-white">
+                <div className="text-center space-y-4">
+                    <Loader2 className="w-10 h-10 text-[#AA792D] animate-spin mx-auto" />
+                    <p className="text-[10px] font-black uppercase tracking-[0.4em] text-gray-400">Synchronizing Archives...</p>
                 </div>
             </div>
         );
     }
 
-    if (editions.length === 0) {
-        return (
-            <div className="h-screen flex items-center justify-center bg-white p-10">
-                <div className="text-center space-y-10 max-w-md">
-                    <div className="relative inline-block">
-                        <div className="w-24 h-24 bg-gray-50 rounded-[2.5rem] flex items-center justify-center mx-auto border border-gray-100 shadow-inner">
-                            <Newspaper size={40} className="text-gray-200" />
-                        </div>
-                        <motion.div
-                            animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.3, 0.1] }}
-                            transition={{ duration: 4, repeat: Infinity }}
-                            className="absolute inset-0 bg-[#AA792D]/10 blur-3xl rounded-full -z-10"
-                        />
-                    </div>
-                    <div className="space-y-4">
-                        <p className="text-[10px] font-black text-[#AA792D] uppercase tracking-[0.5em]">Network Node Dormant</p>
-                        <h2 className="text-3xl font-black uppercase tracking-tighter italic text-[#2B2523]">No Active <span className="text-[#AA792D]">Archives</span></h2>
-                        <p className="text-gray-400 text-xs font-bold leading-relaxed uppercase tracking-widest">
-                            The intelligence repository for this node is currently offline. <br />
-                            Verify deployment status in the <span className="text-[#2B2523] underline decoration-[#AA792D] decoration-2">Admin Gateway</span>.
-                        </p>
-                    </div>
-                    <button
-                        onClick={() => navigate('/admin')}
-                        className="px-10 py-4 bg-[#2B2523] text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] shadow-2xl hover:bg-[#AA792D] transition-all active:scale-95"
-                    >
-                        Access Admin Panel
-                    </button>
-                </div>
-            </div>
-        );
-    }
+    const currentEdition = editions.find(e => e.id === selectedEditionId);
 
     return (
-        <div className="h-screen flex flex-col bg-white text-[#2B2523] overflow-hidden font-sans">
-            {/* Header */}
-            <header className="h-20 bg-white border-b border-gray-100 px-8 flex items-center justify-between z-50 shrink-0 shadow-sm">
-                <div className="flex items-center gap-10">
-                    <button
-                        onClick={() => {
-                            setSelectedEditionId(null);
-                            setPages([]);
-                            setFeedStatus('idle');
-                            setLeftPanelCollapsed(false);
-                        }}
-                        className="flex items-center gap-4 group cursor-pointer text-left"
-                    >
-                        <div className="w-10 h-10 bg-[#AA792D] rounded-xl flex items-center justify-center shadow-lg shadow-[#AA792D]/20 group-hover:scale-110 transition-transform">
-                            <Newspaper size={20} className="text-white" />
+        <div className="h-screen flex flex-col bg-white text-[#2B2523] font-sans selection:bg-[#AA792D]/20 overflow-hidden">
+
+            {/* Global Branding Header (Only if Feed is Active) */}
+            {!selectedEditionId && (
+                <header className="h-20 bg-white border-b border-gray-100 px-8 flex items-center justify-between shrink-0 z-50">
+                    <div className="flex items-center gap-5">
+                        <div className="w-10 h-10 bg-[#AA792D] rounded-xl flex items-center justify-center shadow-lg shadow-[#AA792D]/20">
+                            <Newspaper size={18} className="text-white" />
                         </div>
                         <div>
-                            <h1 className="text-sm font-black italic uppercase tracking-tighter leading-none group-hover:text-[#AA792D] transition-colors">ASRE HAZIR <span className="text-[#AA792D]">DIGITAL</span></h1>
-                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Industrial E-Paper Feed</p>
-                        </div>
-                    </button>
-
-                    <div className="hidden lg:flex items-center gap-6">
-                        <div className="h-8 w-px bg-gray-100 mx-2" />
-
-                        {/* Premium Date Selector */}
-                        <div className="relative" ref={datePickerRef}>
-                            <div
-                                onClick={() => setShowDatePicker(!showDatePicker)}
-                                className={`flex items-center gap-3 bg-gray-50 px-5 py-2.5 rounded-xl border transition-all cursor-pointer ${showDatePicker ? 'border-[#AA792D] bg-white shadow-md' : 'border-gray-100 hover:border-[#AA792D]/30'}`}
-                            >
-                                <Calendar size={14} className="text-[#AA792D]" />
-                                <span className="text-[10px] font-black uppercase tracking-widest text-[#2B2523]">{selectedDate || 'Select Edition'}</span>
-                                <ChevronRight size={12} className="text-gray-300 rotate-90" />
-                            </div>
-
-                            <AnimatePresence>
-                                {showDatePicker && (
-                                    <motion.div
-                                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                                        exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                                        className="absolute top-full left-0 mt-2 w-72 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[60] overflow-hidden"
-                                    >
-                                        <div className="p-4 border-b border-gray-50 bg-gray-50/50">
-                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Available Archives</p>
-                                        </div>
-                                        <div className="max-h-60 overflow-y-auto custom-scrollbar">
-                                            {editions.map(e => (
-                                                <button
-                                                    key={e.id}
-                                                    onClick={() => {
-                                                        setSelectedDate(e.editionDate);
-                                                        setSelectedEditionId(e.id);
-                                                        setShowDatePicker(false);
-                                                    }}
-                                                    className={`w-full px-5 py-4 text-left hover:bg-gray-50 flex items-center justify-between border-b border-gray-50 last:border-0 transition-colors ${selectedEditionId === e.id ? 'bg-[#AA792D]/5 text-[#AA792D]' : 'text-gray-600'}`}
-                                                >
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[10px] font-black uppercase tracking-widest font-bold">{e.name || e.editionDate}</span>
-                                                        <span className="text-[7px] font-medium text-gray-400 mt-0.5">{e.editionDate}</span>
-                                                        <span className={`text-[7px] font-black uppercase mt-1 ${e.type === 'pdf' ? 'text-red-500' : 'text-[#AA792D]'}`}>{e.type === 'pdf' ? 'PDF Portfolio' : 'Interactive'}</span>
-                                                    </div>
-                                                    {selectedEditionId === e.id && <Zap size={12} className="fill-[#AA792D] text-[#AA792D]" />}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
-
-                        {/* Search Bar */}
-                        <div className="relative flex items-center">
-                            <Search className="absolute left-4 text-gray-400" size={14} />
-                            <input
-                                type="text"
-                                placeholder="Search Intel..."
-                                className="bg-gray-50 border border-gray-100 rounded-xl px-10 py-2.5 text-[10px] font-black uppercase tracking-widest outline-none focus:border-[#AA792D]/50 focus:bg-white transition-all w-64 placeholder:text-gray-400 text-[#2B2523]"
-                                onChange={(e) => {
-                                    const term = e.target.value.toLowerCase();
-                                    if (term.length > 2) {
-                                        const found = articles.find(a => a.headline?.toLowerCase().includes(term));
-                                        if (found) handleArticleClick(found);
-                                    }
-                                }}
-                            />
-                        </div>
-
-                        <div className="h-8 w-px bg-gray-100 mx-2" />
-
-                        {selectedEditionId && (
-                            <div className="flex items-center gap-3">
-                                <button
-                                    onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
-                                    className={`flex items-center gap-3 px-5 py-2.5 rounded-xl border transition-all shadow-sm active:scale-95 ${!leftPanelCollapsed ? 'bg-white border-[#AA792D] text-[#AA792D]' : 'bg-gray-50 border-gray-100 text-gray-400'}`}
-                                >
-                                    <Sidebar size={16} />
-                                    <span className="text-[10px] font-black uppercase tracking-widest leading-none">
-                                        {!leftPanelCollapsed ? 'Hide Sidebar' : 'Show Sidebar'}
-                                    </span>
-                                </button>
-
-                                <button
-                                    onClick={() => {
-                                        setSelectedEditionId(null);
-                                        setPages([]);
-                                        setFeedStatus('idle');
-                                        setLeftPanelCollapsed(false);
-                                    }}
-                                    className="flex items-center gap-3 px-5 py-2.5 bg-[#2B2523] text-white rounded-xl hover:bg-[#AA792D] transition-all shadow-lg active:scale-95"
-                                >
-                                    <ChevronLeft size={16} />
-                                    <span className="text-[10px] font-black uppercase tracking-widest">Exit Reader</span>
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-6">
-                    <div className="hidden md:flex items-center gap-4">
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-lg">
-                            <Activity size={12} className="text-green-600" />
-                            <span className="text-[9px] font-black text-green-600 uppercase tracking-widest">Live Sync</span>
+                            <h1 className="text-sm font-black uppercase tracking-tighter italic">Asre Hazir <span className="text-[#AA792D]">Digital</span></h1>
+                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Industrial e-paper Feed</p>
                         </div>
                     </div>
-                    <button
-                        onClick={() => navigate('/admin')}
-                        className="p-3 bg-gray-50 hover:bg-white hover:shadow-md rounded-xl border border-gray-100 transition-all text-gray-400 hover:text-[#AA792D]"
-                    >
-                        <User size={18} />
+                    <button onClick={() => navigate('/admin')} className="p-3 rounded-xl hover:bg-gray-50 text-gray-400 hover:text-[#AA792D] transition-all">
+                        <User size={20} />
                     </button>
-                </div>
-            </header>
+                </header>
+            )}
 
-            {/* Main Workspace */}
-            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-white relative">
-
-                {/* Document Sidebar Backdrop for Mobile */}
+            <div className="flex-1 flex overflow-hidden relative">
+                {/* Mobile Backdrop */}
                 <AnimatePresence>
                     {!leftPanelCollapsed && isMobile && selectedEditionId && (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => setLeftPanelCollapsed(true)}
-                            className="fixed inset-0 bg-[#2B2523]/60 backdrop-blur-sm z-30 lg:hidden"
-                        />
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setLeftPanelCollapsed(true)} className="fixed inset-0 bg-[#2B2523]/60 backdrop-blur-sm z-30 lg:hidden" />
                     )}
                 </AnimatePresence>
 
-                {/* Document Sidebar - Sidebar Library for Switching */}
-                {selectedEditionId ? (
-                    <aside className={`bg-white border-r border-gray-100 transition-all duration-300 flex flex-col shrink-0 z-40 
-                        ${isMobile
-                            ? `fixed inset-y-0 left-0 w-80 shadow-2xl transform ${leftPanelCollapsed ? '-translate-x-full' : 'translate-x-0'}`
-                            : (leftPanelCollapsed ? 'w-0 overflow-hidden' : 'w-80')}`}
-                    >
-                        <DocumentSidebar
-                            editions={editions}
-                            selectedEditionId={selectedEditionId}
-                            onClose={() => setLeftPanelCollapsed(true)}
-                            onSelect={(e) => {
-                                setSelectedEditionId(e.id);
-                                if (isMobile) {
-                                    setTimeout(() => setLeftPanelCollapsed(true), 300);
-                                }
-                            }}
-                        />
-                    </aside>
-                ) : null}
-
-                {/* Mobile Menu Toggle Bar - Only visible when an edition is selected */}
-                {isMobile && selectedEditionId ? (
-                    <div className="h-14 bg-white border-b border-gray-100 flex items-center justify-between px-6 z-30 shadow-sm shrink-0">
-                        <button
-                            onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
-                            className="p-2 bg-gray-50 rounded-xl text-[#AA792D]"
+                {/* Sidebar (Reader Mode) */}
+                <AnimatePresence>
+                    {selectedEditionId && (
+                        <motion.aside
+                            initial={isMobile ? { x: -320 } : { width: 0 }}
+                            animate={isMobile ? { x: leftPanelCollapsed ? -320 : 0 } : { width: leftPanelCollapsed ? 0 : 320 }}
+                            exit={isMobile ? { x: -320 } : { width: 0 }}
+                            className={`bg-white border-r border-gray-100 flex flex-col shrink-0 z-40 relative ${isMobile ? 'fixed inset-y-0 left-0 w-80 shadow-2xl' : 'h-full'}`}
                         >
-                            <Menu size={20} />
-                        </button>
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Document Controls</span>
-                        <div className="w-10" />
-                    </div>
-                ) : null}
+                            <DocumentSidebar editions={editions} selectedEditionId={selectedEditionId} onClose={() => setLeftPanelCollapsed(true)} onSelect={handleEditionSelect} />
+                        </motion.aside>
+                    )}
+                </AnimatePresence>
 
-                {/* Central Canvas Container */}
-                <main className="flex-1 relative bg-white overflow-hidden flex flex-col">
-                    <div className="flex-1 overflow-hidden relative flex flex-col">
-                        {!selectedEditionId ? (
+                {/* Main Workspace */}
+                <main className="flex-1 relative bg-white flex flex-col overflow-hidden">
+                    {!selectedEditionId ? (
+                        /* State 1: FEED VIEW */
+                        <div className="flex-1 flex flex-col overflow-hidden">
                             <EditionFeed
                                 editions={editions}
+                                onSelect={handleEditionSelect}
                                 selectedDate={selectedDate}
-                                onDateSelect={setSelectedDate}
-                                onSelect={(e) => {
-                                    setSelectedDate(e.editionDate);
-                                    setSelectedEditionId(e.id);
-                                }}
+                                onDateSelect={handleDateSelect}
                             />
-                        ) : (
-                            <div className="flex-1 overflow-hidden relative">
-                                <NewspaperStream
-                                    pages={pages}
-                                    edition={editions.find(e => e.id === selectedEditionId)}
-                                />
-                            </div>
-                        )}
+                        </div>
+                    ) : (
+                        /* State 2: READER VIEW (The Image Stream) */
+                        <div className="flex-1 flex flex-col overflow-hidden relative bg-[#F8F9FB]">
 
-                        {/* ATOMIC LOADER OVERLAY */}
-                        <AnimatePresence>
-                            {feedStatus === 'loading' && (
-                                <motion.div
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    exit={{ opacity: 0 }}
-                                    className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md z-30"
-                                >
-                                    <div className="text-center space-y-4">
-                                        <div className="relative">
-                                            <Loader2 className="w-12 h-12 animate-spin text-[#AA792D] mx-auto" />
-                                            <motion.div
-                                                animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
-                                                transition={{ duration: 2, repeat: Infinity }}
-                                                className="absolute inset-0 bg-[#AA792D]/10 blur-xl rounded-full"
-                                            />
+                            {/* Reader Toolbar */}
+                            <header className="h-16 bg-white border-b border-gray-100 flex items-center justify-between px-6 shrink-0 z-30 shadow-sm">
+                                <div className="flex items-center gap-4">
+                                    <button onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)} className={`p-2.5 rounded-xl transition-all ${leftPanelCollapsed ? 'bg-gray-50 text-[#AA792D]' : 'bg-[#2B2523] text-white shadow-lg shadow-[#2B2523]/20'}`}>
+                                        <Sidebar size={18} />
+                                    </button>
+                                    <div className="h-6 w-px bg-gray-100 mx-1 hidden sm:block" />
+                                    <button onClick={() => setSelectedEditionId(null)} className="flex items-center gap-2 px-4 py-2 hover:bg-gray-50 rounded-xl text-[10px] font-black uppercase tracking-widest text-[#AA792D] transition-all">
+                                        <LayoutGrid size={16} /> Library
+                                    </button>
+                                </div>
+
+                                <div className="hidden md:flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl p-1">
+                                    <button onClick={() => setZoom(z => Math.max(50, z - 25))} className="p-2 hover:bg-white rounded-lg hover:text-[#AA792D] transition-all"><ZoomOut size={16} /></button>
+                                    <span className="text-[9px] font-black px-2 w-12 text-center text-[#2B2523]">{zoom}%</span>
+                                    <button onClick={() => setZoom(z => Math.min(200, z + 25))} className="p-2 hover:bg-white rounded-lg hover:text-[#AA792D] transition-all"><ZoomIn size={16} /></button>
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                    <div className="text-right hidden sm:block">
+                                        <p className="text-[10px] font-black uppercase tracking-tight text-[#2B2523]">{currentEdition?.name}</p>
+                                        <p className="text-[8px] font-bold text-[#AA792D] uppercase tracking-widest">{pages.length} Pages • Ready</p>
+                                    </div>
+                                    <div className="h-6 w-px bg-gray-100 mx-1" />
+                                    <button
+                                        onClick={() => window.open(currentEdition?.fileUrl, '_blank')}
+                                        className="flex items-center gap-2 px-5 py-2.5 bg-[#AA792D] text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:opacity-90 shadow-xl shadow-[#AA792D]/20 transition-all active:scale-95"
+                                    >
+                                        <Download size={14} /> PDF
+                                    </button>
+                                </div>
+                            </header>
+
+                            {/* THE IMAGE STREAM (Hans India Style) */}
+                            <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#EDF0F3] p-6 lg:p-12 relative">
+                                {feedStatus === 'loading' && (
+                                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#EDF0F3]/80 backdrop-blur-sm">
+                                        <div className="text-center space-y-4">
+                                            <Loader2 className="w-12 h-12 text-[#AA792D] animate-spin mx-auto" />
+                                            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#2B2523]">Decoding Image Frame Stream...</p>
                                         </div>
-                                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em] animate-pulse">Switching Feed State...</p>
                                     </div>
-                                </motion.div>
-                            )}
+                                )}
 
-                            {feedStatus === 'error' && (
-                                <motion.div
-                                    initial={{ opacity: 0, scale: 0.9 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    className="absolute inset-0 flex items-center justify-center bg-white/90 z-40 p-8"
-                                >
-                                    <div className="text-center space-y-6 max-w-sm">
-                                        <AlertTriangle className="w-16 h-16 text-amber-500 mx-auto" />
-                                        <h2 className="text-lg font-black uppercase tracking-widest italic text-[#2B2523]">Signal Failure</h2>
-                                        <p className="text-gray-500 text-xs font-medium leading-relaxed uppercase tracking-wider">{error || "Connection timed out."}</p>
-                                        <button
-                                            onClick={() => loadFeed(selectedDate, editions.find(e => e.editionDate === selectedDate)?.id)}
-                                            className="px-8 py-3 bg-[#AA792D] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-transform shadow-lg shadow-[#AA792D]/20"
-                                        >
-                                            Retry Digital Sync
-                                        </button>
+                                {feedStatus === 'empty' ? (
+                                    <div className="flex flex-col items-center justify-center py-32 text-center">
+                                        <AlertCircle size={48} className="text-gray-300 mb-6" />
+                                        <h3 className="text-lg font-black uppercase tracking-tight text-[#2B2523]">Processing Digital Feed</h3>
+                                        <p className="text-xs text-gray-400 font-bold uppercase tracking-widest max-w-xs mt-2">
+                                            The pages for this edition are currently being converted. Please try again in 60 seconds.
+                                        </p>
                                     </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </div>
-
+                                ) : (
+                                    <div className="max-w-5xl mx-auto space-y-12 pb-32">
+                                        {pages.map((page, idx) => (
+                                            <motion.div
+                                                key={page.id}
+                                                initial={{ opacity: 0, y: 50 }}
+                                                whileInView={{ opacity: 1, y: 0 }}
+                                                viewport={{ once: true, margin: "-100px" }}
+                                                className="relative bg-white shadow-2xl rounded-sm overflow-hidden border border-gray-200"
+                                                style={{ width: `${zoom}%`, margin: '0 auto' }}
+                                            >
+                                                <img
+                                                    src={page.imageUrl}
+                                                    alt={`Page ${idx + 1}`}
+                                                    className="w-full h-auto block select-none pointer-events-none"
+                                                    loading="lazy"
+                                                />
+                                                <div className="absolute top-4 left-4 px-4 py-1.5 bg-black/80 text-white text-[8px] font-black uppercase tracking-widest rounded-lg backdrop-blur-md">
+                                                    Page {page.pageNumber || idx + 1}
+                                                </div>
+                                            </motion.div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </main>
             </div>
-
-            {/* Mobile Bottom Sheet (Article Reader) */}
-            <AnimatePresence>
-                {isMobile && selectedArticle && (
-                    <motion.div
-                        initial={{ y: '100%' }}
-                        animate={{ y: 0 }}
-                        exit={{ y: '100%' }}
-                        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                        className="fixed inset-x-0 bottom-0 z-[100] h-[75vh] flex flex-col bg-[#0B0F19] rounded-t-[2.5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.5)] border-t border-white/10 overflow-hidden"
-                    >
-                        {/* Drag Handle */}
-                        <div className="h-1.5 w-12 bg-white/20 rounded-full mx-auto my-4 shrink-0" />
-
-                        <div className="p-6 flex justify-between items-center border-b border-white/5 shrink-0 bg-[#0B0F19]">
-                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-500">Live Reading Mode</span>
-                            <button
-                                onClick={() => setSelectedArticle(null)}
-                                className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl text-gray-400"
-                            >
-                                <ChevronRight size={20} className="rotate-90" />
-                            </button>
-                        </div>
-                        <div className="flex-1 overflow-hidden">
-                            <ArticlePreview
-                                article={selectedArticle}
-                                onClose={() => setSelectedArticle(null)}
-                                onNext={() => {
-                                    const idx = articles.findIndex(a => a.id === selectedArticle.id);
-                                    if (idx < articles.length - 1) setSelectedArticle({ ...articles[idx + 1], imageUrl: pages[currentPageIndex]?.imageUrl });
-                                }}
-                                onPrev={() => {
-                                    const idx = articles.findIndex(a => a.id === selectedArticle.id);
-                                    if (idx > 0) setSelectedArticle({ ...articles[idx - 1], imageUrl: pages[currentPageIndex]?.imageUrl });
-                                }}
-                            />
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
         </div>
     );
 };

@@ -1,6 +1,7 @@
 import React, { useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, Calendar, FileText, ChevronRight, Hash } from 'lucide-react';
+import CalendarPicker from './CalendarPicker';
 
 const EditionFeed = ({ editions, onSelect, selectedDate, onDateSelect }) => {
 
@@ -48,50 +49,47 @@ const EditionFeed = ({ editions, onSelect, selectedDate, onDateSelect }) => {
             <div className="max-w-7xl mx-auto px-6 py-12 lg:py-16 space-y-12">
 
                 {/* Header Section */}
-                <header className="space-y-6 text-center max-w-4xl mx-auto mb-8">
+                <header className="space-y-6 text-center max-w-4xl mx-auto mb-16">
                     <div className="flex items-center justify-center gap-3">
                         <div className="w-8 h-px bg-[#AA792D]" />
                         <span className="text-[10px] font-black text-[#AA792D] uppercase tracking-[0.4em]">Intelligence Archives</span>
                         <div className="w-8 h-px bg-[#AA792D]" />
                     </div>
-                    <h2 className="text-4xl lg:text-6xl font-black text-[#2B2523] tracking-tighter italic uppercase leading-none">
-                        Discovery <span className="text-[#AA792D]">Gateway</span>
+                    <h2 className="text-4xl lg:text-7xl font-black text-[#2B2523] tracking-tighter italic uppercase leading-[0.85]">
+                        Discovery <br /> <span className="text-[#AA792D]">Gateway</span>
                     </h2>
 
-                    {/* Strategic Date Strip */}
-                    <div className="flex flex-wrap justify-center gap-2 mt-10">
-                        {uniqueDates.map(date => (
-                            <button
-                                key={date}
-                                onClick={() => onDateSelect(date)}
-                                className={`px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all
-                                    ${selectedDate === date
-                                        ? 'bg-[#AA792D] text-white shadow-xl shadow-[#AA792D]/20 scale-105'
-                                        : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
-                            >
-                                {date}
-                            </button>
-                        ))}
+                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.3em] max-w-sm mx-auto mt-6">
+                        Synchronize with historical digital feeds through the high-fidelity archive retrieval system.
+                    </p>
+
+                    {/* Premium Calendar Component */}
+                    <div className="mt-16">
+                        <CalendarPicker
+                            editions={editions}
+                            selectedDate={selectedDate}
+                            onDateSelect={onDateSelect}
+                        />
                     </div>
                 </header>
 
-                {/* Main Feed Grid */}
+                {/* Main Feed Grid - Larger Impactful Cards */}
                 {filteredEditions.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-10 pb-32">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-12 lg:gap-16 pb-32 max-w-6xl mx-auto">
                         <AnimatePresence mode="popLayout">
                             {filteredEditions.map((edition, index) => (
                                 <motion.div
                                     key={edition.id}
                                     layout
-                                    initial={{ opacity: 0, y: 20 }}
+                                    initial={{ opacity: 0, y: 30 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, scale: 0.95 }}
-                                    transition={{ duration: 0.4, delay: index * 0.05 }}
+                                    transition={{ duration: 0.6, delay: index * 0.1, ease: [0.22, 1, 0.36, 1] }}
                                     onClick={() => onSelect(edition)}
                                     className="group cursor-pointer flex flex-col"
                                 >
-                                    {/* Card Wrapper */}
-                                    <div className="relative aspect-[1/1.4] rounded-[2.5rem] overflow-hidden border border-gray-100 group-hover:border-[#AA792D]/30 transition-all duration-500 shadow-sm group-hover:shadow-2xl group-hover:shadow-[#AA792D]/10">
+                                    {/* Card Wrapper - Extra Large Vertical */}
+                                    <div className="relative aspect-[1/1.45] rounded-[3rem] overflow-hidden border border-gray-100 group-hover:border-[#AA792D]/40 transition-all duration-700 shadow-xl shadow-gray-200/50 group-hover:shadow-[0_40px_80px_-15px_rgba(170,121,45,0.2)] bg-gray-50">
                                         {edition.thumbnailUrl || edition.thumbnail ? (
                                             <img
                                                 src={edition.thumbnailUrl || edition.thumbnail}
@@ -99,39 +97,50 @@ const EditionFeed = ({ editions, onSelect, selectedDate, onDateSelect }) => {
                                                 className="w-full h-full object-cover transition-all duration-1000 opacity-95 group-hover:opacity-100 scale-100 group-hover:scale-110"
                                             />
                                         ) : (
-                                            <div className="w-full h-full bg-gray-50 flex flex-col items-center justify-center gap-4 text-center p-6">
-                                                <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center shadow-inner">
-                                                    <FileText size={32} className="text-[#AA792D]/20" />
+                                            <div className="w-full h-full flex flex-col items-center justify-center gap-6 text-center p-12">
+                                                <div className="w-24 h-24 bg-white rounded-[2rem] flex items-center justify-center shadow-inner">
+                                                    <FileText size={40} className="text-[#AA792D]/20" />
                                                 </div>
-                                                <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest leading-none">Digitizing Feed...</span>
+                                                <div className="space-y-1">
+                                                    <span className="block text-[10px] font-black text-[#2B2523] uppercase tracking-widest">Archive Signal</span>
+                                                    <span className="block text-[8px] font-bold text-gray-300 uppercase tracking-widest">Awaiting Frame Sync...</span>
+                                                </div>
                                             </div>
                                         )}
 
-                                        {/* Action Reveal */}
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col items-center justify-center p-8 backdrop-blur-[2px]">
-                                            <div className="w-full py-4 bg-white text-center rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] text-[#2B2523] transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500">
-                                                Open Intelligence
+                                        {/* Premium Overlay Reveal */}
+                                        <div className="absolute inset-0 bg-gradient-to-t from-[#2B2523] via-[#2B2523]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 flex flex-col items-center justify-end p-12 backdrop-blur-[1px]">
+                                            <div className="w-full py-5 bg-[#AA792D] text-white text-center rounded-2xl text-[11px] font-black uppercase tracking-[0.4em] transform translate-y-8 group-hover:translate-y-0 transition-transform duration-700 ease-out shadow-2xl">
+                                                Open Archive
+                                            </div>
+                                            <div className="mt-4 text-white/40 text-[8px] font-black uppercase tracking-[0.2em] transform translate-y-8 group-hover:translate-y-0 transition-transform duration-700 delay-75">
+                                                Direct PDF Injection
                                             </div>
                                         </div>
 
                                         {/* Type Badge */}
-                                        <div className="absolute top-6 left-6 px-4 py-1.5 bg-[#AA792D] text-white text-[8px] font-black rounded-xl uppercase tracking-widest shadow-xl z-10 border border-white/10">
-                                            {edition.type?.includes('pdf') ? 'PDF ARCHIVE' : 'INTERACTIVE'}
+                                        <div className="absolute top-8 left-8 flex items-center gap-3">
+                                            <div className="px-5 py-2 bg-[#AA792D] text-white text-[9px] font-black rounded-2xl uppercase tracking-widest shadow-2xl border border-white/20">
+                                                PDF
+                                            </div>
                                         </div>
                                     </div>
 
-                                    {/* Metadata */}
-                                    <div className="mt-6 px-4 space-y-2 text-center lg:text-left">
-                                        <p className="text-xs font-black text-[#2B2523] uppercase tracking-widest truncate group-hover:text-[#AA792D] transition-colors">
-                                            {edition.name || 'Digital Transmission'}
-                                        </p>
-                                        <div className="flex items-center justify-center lg:justify-start gap-4">
+                                    {/* Metadata - Premium Typography */}
+                                    <div className="mt-10 px-6 space-y-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-2 h-2 rounded-full bg-[#AA792D] shadow-[0_0_10px_rgba(170,121,45,0.8)]" />
+                                            <p className="text-[12px] font-black text-[#2B2523] uppercase tracking-[2px] truncate group-hover:text-[#AA792D] transition-colors duration-300">
+                                                {edition.name || 'Digital Transmission'}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-6 pl-5">
                                             <div className="flex items-center gap-2">
-                                                <Calendar size={12} className="text-[#AA792D]" />
-                                                <span className="text-[9px] font-black text-gray-400 tracking-widest uppercase">{edition.editionDate}</span>
+                                                <Calendar size={14} className="text-gray-300" />
+                                                <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase">{edition.editionDate}</span>
                                             </div>
-                                            <div className="w-1 h-1 rounded-full bg-gray-200" />
-                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">EDITION {index + 1}</span>
+                                            <div className="h-4 w-px bg-gray-100" />
+                                            <span className="text-[10px] font-bold text-[#AA792D]/40 uppercase tracking-widest">Node ID {edition.id?.slice(0, 6)}</span>
                                         </div>
                                     </div>
                                 </motion.div>
@@ -144,10 +153,10 @@ const EditionFeed = ({ editions, onSelect, selectedDate, onDateSelect }) => {
                             <FileText size={32} className="text-gray-200" />
                         </div>
                         <div className="space-y-2">
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em]">Node Empty</p>
-                            <h3 className="text-xl font-black text-[#2B2523] uppercase italic">No Active Archives Found</h3>
+                            <p className="text-[10px] font-black text-[#AA792D] uppercase tracking-[0.4em]">Signal Offline</p>
+                            <h3 className="text-xl font-black text-[#2B2523] uppercase italic">Archive Not Available</h3>
                             <p className="text-[9px] text-gray-400 font-bold uppercase tracking-[0.2em] max-w-xs mx-auto">
-                                The intelligence repository for this synchronization date is currently awaiting deployment.
+                                The edition for <span className="text-[#AA792D]">{selectedDate}</span> has not been synchronized yet.
                             </p>
                         </div>
                     </div>
