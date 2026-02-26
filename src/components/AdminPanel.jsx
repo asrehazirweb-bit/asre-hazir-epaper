@@ -68,8 +68,8 @@ const AdminPanel = ({ onBack }) => {
                             <button onClick={onBack} className="mb-6 text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 hover:text-[#AA792D] flex items-center justify-center gap-1 mx-auto transition-colors">
                                 <ChevronLeft size={14} /> Back to Reader
                             </button>
-                            <div className="w-16 h-16 bg-[#2B2523] rounded-2xl flex items-center justify-center shadow-xl shadow-[#2B2523]/20 mx-auto mb-6">
-                                <ShieldCheck className="text-white" size={32} />
+                            <div className="mb-6 flex justify-center">
+                                <img src="/logo.png" alt="Asre Hazir" className="h-16 w-auto object-contain" />
                             </div>
                             <h2 className="text-3xl font-black text-[#2B2523] tracking-tighter uppercase italic">E-Paper <span className="text-[#AA792D]">Admin</span></h2>
                             <p className="mt-3 text-sm font-medium text-gray-400 uppercase tracking-widest text-[10px]">Security Gateway</p>

@@ -155,14 +155,11 @@ const AdminLayout = ({ user, onBack }) => {
                 bg-white border-r border-gray-100
             `}>
                 {/* Logo Section */}
-                <div className="h-24 flex items-center px-8 border-b border-gray-100 shrink-0">
-                    <div className="w-10 h-10 bg-[#AA792D] rounded-xl flex items-center justify-center shadow-lg shadow-[#AA792D]/20 shrink-0">
-                        <Newspaper size={20} className="text-white" />
-                    </div>
+                <div className="h-32 flex flex-col items-center justify-center px-8 border-b border-gray-100 shrink-0 bg-gray-50/50">
+                    <img src="/logo.png" alt="Asre Hazir" className={`transition-all duration-300 ${collapsed ? 'h-12' : 'h-16'} w-auto object-contain`} />
                     {(!collapsed || (isMobile && mobileMenuOpen)) && (
-                        <div className="ml-4 animate-in fade-in slide-in-from-left-4">
-                            <h1 className="text-sm font-black uppercase tracking-tighter italic leading-none">ASRE HAZIR</h1>
-                            <p className="text-[9px] font-bold text-[#AA792D] uppercase tracking-widest mt-1">Admin Console</p>
+                        <div className="mt-2 text-center animate-in fade-in slide-in-from-top-2">
+                            <p className="text-[9px] font-black text-[#AA792D] uppercase tracking-[0.3em]">Admin Console</p>
                         </div>
                     )}
                 </div>

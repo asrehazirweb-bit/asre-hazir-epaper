@@ -103,16 +103,16 @@ const EpaperReader = () => {
 
             {/* 1. TOP HEADER (Only in Home Feed) */}
             {!selectedEditionId && (
-                <header className="h-16 lg:h-20 bg-white border-b border-gray-100 flex items-center justify-between px-6 lg:px-10 shrink-0 z-50">
-                    <div className="flex items-center gap-4 lg:gap-6">
-                        <div className="w-9 h-9 lg:w-11 h-11 bg-[#AA792D] rounded-xl flex items-center justify-center shadow-lg shadow-[#AA792D]/20">
-                            <Newspaper size={18} className="text-white" />
-                        </div>
-                        <div>
-                            <h1 className="text-xs lg:text-sm font-black uppercase tracking-tight italic">
-                                Asre Hazir <span className="text-[#AA792D]">Digital</span>
-                            </h1>
-                            <p className="text-[8px] lg:text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Industrial e-paper</p>
+                <header className="h-16 lg:h-24 bg-white border-b border-gray-100 flex items-center justify-between px-6 lg:px-10 shrink-0 z-50">
+                    <div className="flex items-center gap-4 lg:gap-6 h-full py-3">
+                        <img
+                            src="/logo.png"
+                            alt="Asre Hazir"
+                            className="h-full w-auto object-contain cursor-pointer"
+                            onClick={() => window.location.reload()}
+                        />
+                        <div className="hidden sm:block border-l border-gray-100 pl-4 h-8 flex items-center">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none">Industrial <span className="text-[#AA792D]">Digital</span> Feed</p>
                         </div>
                     </div>
                     <button onClick={() => navigate('/admin')} className="p-2.5 rounded-xl hover:bg-gray-50 text-gray-400 hover:text-[#AA792D] transition-all">
