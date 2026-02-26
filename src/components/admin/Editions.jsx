@@ -58,9 +58,6 @@ const Editions = ({ editions, onEdit, onDelete }) => {
                         {showUpload ? <X size={16} /> : <Plus size={16} />}
                         {showUpload ? 'Abord Deployment' : 'Deploy Edition'}
                     </button>
-                    <div className="p-3 bg-gray-50 border border-gray-100 rounded-xl text-gray-400 hover:text-[#AA792D] cursor-pointer transition-colors">
-                        <Settings2 size={20} />
-                    </div>
                 </div>
             </div>
 
@@ -169,7 +166,7 @@ const Editions = ({ editions, onEdit, onDelete }) => {
                                                 }}
                                                 className="col-span-3 flex items-center justify-center gap-2 py-3 bg-[#2B2523] text-white hover:bg-black rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-black/10"
                                             >
-                                                <Edit2 size={12} /> {edition.type === 'pdf' ? 'Update' : 'Control'}
+                                                <Edit2 size={12} /> {edition.type === 'pdf' ? 'Update' : 'Edit'}
                                             </button>
                                             <button onClick={() => onDelete(edition.id)} className="flex items-center justify-center bg-red-50 hover:bg-red-500 text-red-500 hover:text-white py-3 rounded-xl transition-all border border-red-100 hover:border-red-500">
                                                 <Trash2 size={14} />
