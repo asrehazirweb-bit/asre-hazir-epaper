@@ -48,20 +48,47 @@ const EditionFeed = ({ editions, onSelect, selectedDate, onDateSelect }) => {
         <div className="flex-1 bg-white overflow-y-auto custom-scrollbar">
             <div className="max-w-6xl mx-auto px-4 lg:px-8 py-10 space-y-16">
 
-                {/* ── HEADER ── */}
-                <header className="text-center space-y-3">
-                    <div className="flex items-center justify-center gap-3">
-                        <div className="w-8 h-px bg-[#AA792D]" />
-                        <span className="text-[10px] font-black text-[#AA792D] uppercase tracking-[0.4em]">Digital Archive</span>
-                        <div className="w-8 h-px bg-[#AA792D]" />
+                <div className="h-1 lg:h-4" /> {/* Spacer */}
+
+                {/* ── CALENDAR FILTER ── */}
+                <section>
+                    <div className="flex items-center gap-3 mb-6">
+                        <Archive size={18} className="text-[#AA792D]" />
+                        <h3 className="text-[12px] font-black uppercase tracking-[0.3em] text-[#2B2523]">Browse by Date</h3>
                     </div>
-                    <h1 className="text-4xl lg:text-6xl font-black text-[#2B2523] tracking-tighter italic uppercase leading-[0.9]">
-                        Asre Hazir<br /><span className="text-[#AA792D]">E-Paper</span>
-                    </h1>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em]">
-                        Read Today's Edition • Browse Archives • Select by Date
-                    </p>
-                </header>
+                    <CalendarPicker
+                        editions={editions}
+                        selectedDate={selectedDate}
+                        onDateSelect={onDateSelect}
+                    />
+
+                    {/* Calendar result */}
+                    {selectedDate && filteredByDate.length > 0 && (
+                        <div className="mt-8 space-y-4">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-[#AA792D]">
+                                📅 Editions for {selectedDate}
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {filteredByDate.map((edition, idx) => (
+                                    <EditionCard key={edition.id} edition={edition} idx={idx} onSelect={onSelect} onDownload={handleDownload} />
+                                ))}
+                            </div>
+                            <button onClick={() => onDateSelect(null)} className="text-[10px] font-black text-gray-400 hover:text-[#AA792D] uppercase tracking-widest transition-colors mt-4">
+                                ✕ Clear date filter
+                            </button>
+                        </div>
+                    )}
+                    {selectedDate && filteredByDate.length === 0 && (
+                        <div className="mt-8 py-12 text-center space-y-3 bg-gray-50 rounded-3xl border border-gray-100">
+                            <FileText size={32} className="text-gray-200 mx-auto" />
+                            <p className="text-[10px] font-black text-[#AA792D] uppercase tracking-widest">Not Available</p>
+                            <p className="text-sm font-medium text-gray-400">No edition found for <strong>{selectedDate}</strong></p>
+                            <button onClick={() => onDateSelect(null)} className="text-[10px] font-black text-gray-400 hover:text-[#AA792D] uppercase tracking-widest transition-colors">
+                                ✕ Clear filter
+                            </button>
+                        </div>
+                    )}
+                </section>
 
                 {/* ── LATEST EDITION HERO ── */}
                 {latestEdition && (
@@ -131,46 +158,6 @@ const EditionFeed = ({ editions, onSelect, selectedDate, onDateSelect }) => {
                         </motion.div>
                     </section>
                 )}
-
-                {/* ── CALENDAR FILTER ── */}
-                <section>
-                    <div className="flex items-center gap-3 mb-6">
-                        <Archive size={18} className="text-[#AA792D]" />
-                        <h3 className="text-[12px] font-black uppercase tracking-[0.3em] text-[#2B2523]">Browse by Date</h3>
-                    </div>
-                    <CalendarPicker
-                        editions={editions}
-                        selectedDate={selectedDate}
-                        onDateSelect={onDateSelect}
-                    />
-
-                    {/* Calendar result */}
-                    {selectedDate && filteredByDate.length > 0 && (
-                        <div className="mt-8 space-y-4">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-[#AA792D]">
-                                📅 Editions for {selectedDate}
-                            </p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {filteredByDate.map((edition, idx) => (
-                                    <EditionCard key={edition.id} edition={edition} idx={idx} onSelect={onSelect} onDownload={handleDownload} />
-                                ))}
-                            </div>
-                            <button onClick={() => onDateSelect(null)} className="text-[10px] font-black text-gray-400 hover:text-[#AA792D] uppercase tracking-widest transition-colors mt-4">
-                                ✕ Clear date filter
-                            </button>
-                        </div>
-                    )}
-                    {selectedDate && filteredByDate.length === 0 && (
-                        <div className="mt-8 py-12 text-center space-y-3 bg-gray-50 rounded-3xl border border-gray-100">
-                            <FileText size={32} className="text-gray-200 mx-auto" />
-                            <p className="text-[10px] font-black text-[#AA792D] uppercase tracking-widest">Not Available</p>
-                            <p className="text-sm font-medium text-gray-400">No edition found for <strong>{selectedDate}</strong></p>
-                            <button onClick={() => onDateSelect(null)} className="text-[10px] font-black text-gray-400 hover:text-[#AA792D] uppercase tracking-widest transition-colors">
-                                ✕ Clear filter
-                            </button>
-                        </div>
-                    )}
-                </section>
 
                 {/* ── ARCHIVE GRID ── */}
                 {!selectedDate && archiveEditions.length > 0 && (
