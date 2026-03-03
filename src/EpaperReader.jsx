@@ -39,7 +39,7 @@ const EpaperReader = () => {
         return () => window.removeEventListener('resize', updateWidth);
     }, []);
 
-    // Initial Data Sync
+    // Initial Data Sync — auto-select latest edition
     useEffect(() => {
         const q = query(collection(db, 'epaper_editions'), where("status", "==", "published"));
         const unsub = onSnapshot(q, (snapshot) => {
@@ -49,11 +49,26 @@ const EpaperReader = () => {
                 const timeB = b.publishedAt?.toMillis() || new Date(b.editionDate || 0).getTime();
                 return timeB - timeA;
             });
-            setEditions(data.filter(e => e.isVisible !== false));
+            const visible = data.filter(e => e.isVisible !== false);
+            setEditions(visible);
             setLoading(false);
+
+            // ✨ AUTO-OPEN LATEST: If no edition is selected yet, pick the first (newest) one
+            if (visible.length > 0) {
+                setSelectedEditionId(prev => {
+                    if (!prev) {
+                        // Load its pages immediately
+                        const latest = visible[0];
+                        // Defer to avoid state batching
+                        setTimeout(() => loadEditionPages(latest.id), 0);
+                        return latest.id;
+                    }
+                    return prev;
+                });
+            }
         });
         return () => unsub();
-    }, []);
+    }, [loadEditionPages]);
 
     const handleDateSelect = useCallback((date) => setSelectedDate(date), []);
 
@@ -172,37 +187,51 @@ const EpaperReader = () => {
 
                             {/* Reader Controls (Toolbar) */}
                             <header className="h-16 bg-white border-b border-gray-100 flex items-center justify-between px-4 lg:px-6 shrink-0 z-40 shadow-sm">
-                                <div className="flex items-center gap-2 lg:gap-4">
+                                <div className="flex items-center gap-2 lg:gap-3">
                                     <button
                                         onClick={() => setSidebarOpen(!sidebarOpen)}
                                         className={`p-2.5 rounded-xl transition-all ${sidebarOpen ? 'bg-[#2B2523] text-white shadow-lg' : 'bg-gray-50 text-[#AA792D]'}`}
                                     >
                                         <SidebarIcon size={18} />
                                     </button>
-                                    <button onClick={() => setSelectedEditionId(null)} className="flex items-center gap-2 px-3 lg:px-4 py-2 hover:bg-gray-50 rounded-xl text-[10px] font-black uppercase tracking-widest text-[#AA792D] transition-all">
-                                        <LayoutGrid size={16} /> <span className="hidden sm:inline">Library</span>
+                                    <button
+                                        onClick={() => setSelectedEditionId(null)}
+                                        className="flex items-center gap-2 px-3 lg:px-4 py-2 hover:bg-gray-50 rounded-xl text-[10px] font-black uppercase tracking-widest text-[#AA792D] transition-all border border-[#AA792D]/20 hover:border-[#AA792D]/50"
+                                    >
+                                        <LayoutGrid size={15} />
+                                        <span className="hidden sm:inline">Archive</span>
                                     </button>
                                 </div>
 
-                                <div className="hidden md:flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl p-1">
-                                    <button onClick={() => setZoom(z => Math.max(50, z - 25))} className="p-2 hover:bg-white rounded-lg hover:text-[#AA792D] transition-all"><ZoomOut size={14} /></button>
-                                    <span className="text-[9px] font-black px-2 w-12 text-center text-[#2B2523]">{zoom}%</span>
-                                    <button onClick={() => setZoom(z => Math.min(200, z + 25))} className="p-2 hover:bg-white rounded-lg hover:text-[#AA792D] transition-all"><ZoomIn size={14} /></button>
+                                {/* Edition Info - Center */}
+                                <div className="hidden sm:flex flex-col items-center">
+                                    <p className="text-[11px] font-black uppercase tracking-tight text-[#2B2523] truncate max-w-[200px]">
+                                        {currentEdition?.name || 'Asre Hazir'}
+                                    </p>
+                                    <p className="text-[9px] font-bold text-[#AA792D] uppercase tracking-widest">
+                                        📅 {currentEdition?.editionDate} · {pages.length} Pages
+                                    </p>
                                 </div>
 
                                 <div className="flex items-center gap-2 lg:gap-3">
-                                    <div className="text-right hidden sm:block">
-                                        <p className="text-[10px] font-black uppercase tracking-tight text-[#2B2523] truncate max-w-[150px]">{currentEdition?.name}</p>
-                                        <p className="text-[8px] font-bold text-[#AA792D] uppercase tracking-widest">{pages.length} Pages</p>
+                                    {/* Zoom Controls */}
+                                    <div className="hidden md:flex items-center gap-1 bg-gray-50 border border-gray-100 rounded-xl p-1">
+                                        <button onClick={() => setZoom(z => Math.max(50, z - 25))} className="p-2 hover:bg-white rounded-lg hover:text-[#AA792D] transition-all"><ZoomOut size={14} /></button>
+                                        <span className="text-[9px] font-black px-2 w-12 text-center text-[#2B2523]">{zoom}%</span>
+                                        <button onClick={() => setZoom(z => Math.min(200, z + 25))} className="p-2 hover:bg-white rounded-lg hover:text-[#AA792D] transition-all"><ZoomIn size={14} /></button>
                                     </div>
-                                    <button
-                                        onClick={() => window.open(currentEdition?.fileUrl, '_blank')}
-                                        className="flex items-center gap-2 px-4 lg:px-5 py-2 lg:py-2.5 bg-[#AA792D] text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-xl shadow-[#AA792D]/20 transition-all hover:scale-105 active:scale-95"
-                                    >
-                                        <Download size={14} /> <span className="hidden xs:inline">PDF</span>
-                                    </button>
+                                    {/* PDF Download */}
+                                    {currentEdition?.fileUrl && (
+                                        <button
+                                            onClick={() => window.open(currentEdition.fileUrl, '_blank')}
+                                            className="flex items-center gap-2 px-4 lg:px-5 py-2 lg:py-2.5 bg-[#AA792D] text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-xl shadow-[#AA792D]/20 transition-all hover:scale-105 active:scale-95"
+                                        >
+                                            <Download size={14} /> <span className="hidden xs:inline">PDF</span>
+                                        </button>
+                                    )}
                                 </div>
                             </header>
+
 
                             {/* Scrolling Image Feed */}
                             <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#EDEFF2] p-4 lg:p-12 relative">
