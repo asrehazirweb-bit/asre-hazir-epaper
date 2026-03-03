@@ -39,6 +39,27 @@ const EpaperReader = () => {
         return () => window.removeEventListener('resize', updateWidth);
     }, []);
 
+    const handleDateSelect = useCallback((date) => setSelectedDate(date), []);
+
+    // Atomic Page Loader — defined BEFORE the data sync useEffect
+    const loadEditionPages = useCallback(async (editionId) => {
+        setFeedStatus('loading');
+        setPages([]);
+        try {
+            const fetchedPages = await getPagesByEdition(editionId);
+            fetchedPages.sort((a, b) => (a.pageNumber || 0) - (b.pageNumber || 0));
+            setPages(fetchedPages);
+            setFeedStatus(fetchedPages.length > 0 ? 'success' : 'empty');
+        } catch (err) {
+            console.error("Page Load Error:", err);
+            setFeedStatus('error');
+        }
+    }, []);
+
+    // Use a ref so the data sync effect can call loadEditionPages without it being a dependency
+    const loadEditionPagesRef = useRef(loadEditionPages);
+    useEffect(() => { loadEditionPagesRef.current = loadEditionPages; }, [loadEditionPages]);
+
     // Initial Data Sync — auto-select latest edition
     useEffect(() => {
         const q = query(collection(db, 'epaper_editions'), where("status", "==", "published"));
@@ -53,14 +74,13 @@ const EpaperReader = () => {
             setEditions(visible);
             setLoading(false);
 
-            // ✨ AUTO-OPEN LATEST: If no edition is selected yet, pick the first (newest) one
+            // ✨ AUTO-OPEN LATEST on first load
             if (visible.length > 0) {
                 setSelectedEditionId(prev => {
                     if (!prev) {
-                        // Load its pages immediately
                         const latest = visible[0];
                         // Defer to avoid state batching
-                        setTimeout(() => loadEditionPages(latest.id), 0);
+                        setTimeout(() => loadEditionPagesRef.current(latest.id), 0);
                         return latest.id;
                     }
                     return prev;
@@ -68,24 +88,9 @@ const EpaperReader = () => {
             }
         });
         return () => unsub();
-    }, [loadEditionPages]);
-
-    const handleDateSelect = useCallback((date) => setSelectedDate(date), []);
-
-    // Atomic Page Loader
-    const loadEditionPages = useCallback(async (editionId) => {
-        setFeedStatus('loading');
-        setPages([]);
-        try {
-            const fetchedPages = await getPagesByEdition(editionId);
-            fetchedPages.sort((a, b) => (a.pageNumber || 0) - (b.pageNumber || 0));
-            setPages(fetchedPages);
-            setFeedStatus(fetchedPages.length > 0 ? 'success' : 'empty');
-        } catch (err) {
-            console.error("Page Load Error:", err);
-            setFeedStatus('error');
-        }
     }, []);
+
+
 
     // Selection Handler
     const handleEditionSelect = useCallback((edition) => {
