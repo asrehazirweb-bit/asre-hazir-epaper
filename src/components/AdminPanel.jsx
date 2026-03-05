@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { auth, db } from '../firebase/config';
 import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { Chrome, ShieldCheck, Zap, ChevronLeft } from 'lucide-react';
 import AdminLayout from './AdminLayout';
 import { useAuth } from '../context/AuthContext';
@@ -21,17 +21,28 @@ const AdminPanel = ({ onBack }) => {
             const result = await signInWithPopup(auth, provider);
             const loggedInUser = result.user;
 
-            // Store/Update user profile in Firestore
-            await setDoc(doc(db, 'users', loggedInUser.uid), {
+            // 1. First, check if user document already exists
+            const userRef = doc(db, 'users', loggedInUser.uid);
+            const userSnap = await getDoc(userRef);
+
+            const userData = {
                 uid: loggedInUser.uid,
                 email: loggedInUser.email,
                 displayName: loggedInUser.displayName,
                 photoURL: loggedInUser.photoURL,
                 lastLogin: serverTimestamp(),
-                role: 'user', // Default role
-                adminRequest: false,
-                requestStatus: null
-            }, { merge: true });
+            };
+
+            // 2. Only set defaults if it's a new user
+            if (!userSnap.exists()) {
+                userData.role = 'user';
+                userData.adminRequest = false;
+                userData.requestStatus = null;
+                await setDoc(userRef, userData);
+            } else {
+                // For existing users, just update profile info and lastLogin
+                await setDoc(userRef, userData, { merge: true });
+            }
 
             console.log("✅ User profile synced with Firestore");
 
