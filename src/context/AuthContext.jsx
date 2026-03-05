@@ -1,52 +1,53 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth, db } from '../firebase/config';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 
-const AuthContext = createContext({ user: null, isAdmin: false, loading: true });
+const AuthContext = createContext({ user: null, userData: null, isAdmin: false, loading: true });
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
+    const [userData, setUserData] = useState(null);
     const [isAdmin, setIsAdmin] = useState(false);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+        let unsubscribeDoc = () => { };
+
+        const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
             setUser(currentUser);
 
             if (currentUser) {
-                setLoading(true);
-                try {
-                    const userRef = doc(db, "users", currentUser.uid);
-                    const userDoc = await getDoc(userRef);
-
-                    if (userDoc.exists()) {
-                        const userData = userDoc.data();
-                        if (userData.role === 'admin') {
-                            setIsAdmin(true);
-                        } else {
-                            setIsAdmin(false);
-                        }
+                // Listen to the user document in real-time
+                unsubscribeDoc = onSnapshot(doc(db, "users", currentUser.uid), (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        setUserData(data);
+                        setIsAdmin(data.role === 'admin');
                     } else {
+                        setUserData(null);
                         setIsAdmin(false);
                     }
-                } catch (error) {
-                    console.error("Error fetching user data from Firestore:", error);
-                    setIsAdmin(false);
-                } finally {
                     setLoading(false);
-                }
+                }, (error) => {
+                    console.error("Error listening to user document:", error);
+                    setLoading(false);
+                });
             } else {
+                setUserData(null);
                 setIsAdmin(false);
                 setLoading(false);
             }
         });
 
-        return () => unsubscribe();
+        return () => {
+            unsubscribeAuth();
+            unsubscribeDoc();
+        };
     }, []);
 
     return (
-        <AuthContext.Provider value={{ user, isAdmin, loading }}>
+        <AuthContext.Provider value={{ user, userData, isAdmin, loading }}>
             {children}
         </AuthContext.Provider>
     );

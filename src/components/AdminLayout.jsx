@@ -30,7 +30,8 @@ import {
     Search as SearchIcon,
     Bell,
     ExternalLink,
-    Layout
+    Layout,
+    ShieldAlert
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ImageUploader from './ImageUploader';
@@ -39,6 +40,7 @@ import ImageUploader from './ImageUploader';
 import Dashboard from './admin/Dashboard';
 import Editions from './admin/Editions';
 import EditionEditor from './admin/EditionEditor';
+import ManageUsers from './admin/ManageUsers';
 import { deleteEditionCascade } from '../services/epaperService';
 import ConfirmModal from './ConfirmModal';
 
@@ -130,6 +132,7 @@ const AdminLayout = ({ user, onBack }) => {
     const navItems = [
         { path: '/admin/dashboard', id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
         { path: '/admin/editions', id: 'editions', label: 'Editions', icon: <Newspaper size={20} /> },
+        { path: '/admin/requests', id: 'requests', label: 'Admin Requests', icon: <ShieldAlert size={20} /> },
     ];
 
     return (
@@ -256,6 +259,7 @@ const AdminLayout = ({ user, onBack }) => {
                                 />
                             } />
                             <Route path="editions/edit/:id" element={<EditionEditor />} />
+                            <Route path="requests" element={<ManageUsers />} />
                         </Routes>
                     </div>
                 </div>

@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { Navigate, useLocation } from 'react-router-dom';
 
 const AdminPanel = ({ onBack }) => {
-    const { user, isAdmin, loading } = useAuth();
+    const { user, userData, isAdmin, loading } = useAuth();
     const [localLoading, setLocalLoading] = useState(false);
     const [error, setError] = useState('');
     const location = useLocation();
@@ -28,7 +28,9 @@ const AdminPanel = ({ onBack }) => {
                 displayName: loggedInUser.displayName,
                 photoURL: loggedInUser.photoURL,
                 lastLogin: serverTimestamp(),
-                // Role is only set if it doesn't exist, to prevent overwriting
+                role: 'user', // Default role
+                adminRequest: false,
+                requestStatus: null
             }, { merge: true });
 
             console.log("✅ User profile synced with Firestore");
@@ -36,6 +38,23 @@ const AdminPanel = ({ onBack }) => {
         } catch (err) {
             console.error(err);
             setError('Login failed: ' + err.message);
+            setLocalLoading(false);
+        }
+    };
+
+    const handleRequestAdmin = async () => {
+        if (!user) return;
+        setLocalLoading(true);
+        try {
+            await setDoc(doc(db, 'users', user.uid), {
+                adminRequest: true,
+                requestStatus: 'pending',
+                requestDate: serverTimestamp()
+            }, { merge: true });
+        } catch (err) {
+            console.error(err);
+            setError('Failed to request access: ' + err.message);
+        } finally {
             setLocalLoading(false);
         }
     };
@@ -82,9 +101,41 @@ const AdminPanel = ({ onBack }) => {
                         )}
 
                         {user && !isAdmin && (
-                            <div className="rounded-xl bg-amber-50 p-4 text-center text-[10px] font-black uppercase tracking-widest text-amber-600 border border-amber-100 mb-6 font-sans">
-                                Access Denied: Admin role required.<br />
-                                <span className="lowercase font-mono text-[8px] opacity-70">UID: {user.uid}</span>
+                            <div className="space-y-4 mb-6">
+                                <div className="rounded-xl bg-amber-50 p-6 text-center border border-amber-100 font-sans">
+                                    <ShieldCheck className="mx-auto mb-3 text-amber-500" size={32} />
+                                    <p className="text-[12px] font-black uppercase tracking-widest text-amber-600 mb-2">Access Required</p>
+                                    <p className="text-[10px] font-bold text-amber-500 leading-relaxed">
+                                        Your account is authenticated, but you do not have admin privileges for the E-Paper portal.
+                                    </p>
+                                </div>
+
+                                {userData?.requestStatus === 'pending' ? (
+                                    <div className="bg-blue-50 border border-blue-100 p-5 rounded-2xl text-center">
+                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600 mb-1">Request Pending</p>
+                                        <p className="text-[8px] font-bold text-blue-400 uppercase tracking-widest">A Main Admin will review your request shortly.</p>
+                                    </div>
+                                ) : userData?.requestStatus === 'rejected' ? (
+                                    <div className="bg-red-50 border border-red-100 p-5 rounded-2xl text-center">
+                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-600 mb-1">Request Rejected</p>
+                                        <p className="text-[8px] font-bold text-red-400 uppercase tracking-widest">Please contact the system administrator for more information.</p>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={handleRequestAdmin}
+                                        disabled={localLoading}
+                                        className="w-full py-4 bg-[#AA792D] text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-lg shadow-[#AA792D]/20 hover:bg-[#8B6225] transition-all disabled:opacity-50 active:scale-95"
+                                    >
+                                        {localLoading ? 'Submitting...' : 'Request Admin Access'}
+                                    </button>
+                                )}
+
+                                <button
+                                    onClick={() => signOut(auth)}
+                                    className="w-full text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-red-500 transition-colors py-2"
+                                >
+                                    Log Out
+                                </button>
                             </div>
                         )}
 
